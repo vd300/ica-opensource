@@ -263,7 +263,7 @@ This application is built with extensibility in mind. You can easily add support
 - The application architecture allows for multiple LLM backends to coexist
 - Users can have the freedom to choose their preferred AI provider
 
-To add new models, simply extend the API integration in `electron/ProcessingHelper.ts` and add the corresponding UI options in `src/components/Settings/SettingsDialog.tsx`. The modular design makes this straightforward without disrupting existing functionality.
+To add new models, simply extend the API integration in `electron/ProcessingHelper.ts` and add the corresponding UI options in `src/components/Settings/SettingsDialog.tsx`. The modular design makes this straightforward without disrupting existing functionality. Current OpenAI settings include `gpt-4o`, `gpt-4o-mini`, and `gpt-5-nano`.
 
 ## Configuration
 

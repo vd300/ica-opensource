@@ -144,6 +144,26 @@ export class ProcessingHelper {
     }
   }
 
+  private isGpt5Model(model: string): boolean {
+    return /^gpt-5(?:[.-]|$)/i.test(model);
+  }
+
+  private getOpenAITokenLimitParam(
+    model: string,
+    maxTokens: number
+  ): { max_tokens: number } | { max_completion_tokens: number } {
+    return this.isGpt5Model(model)
+      ? { max_completion_tokens: maxTokens }
+      : { max_tokens: maxTokens };
+  }
+
+  private getOpenAITemperatureParam(
+    model: string,
+    temperature: number
+  ): { temperature: number } | Record<string, never> {
+    return this.isGpt5Model(model) ? {} : { temperature };
+  }
+
   private async waitForInitialization(
     mainWindow: BrowserWindow
   ): Promise<void> {
@@ -510,11 +530,12 @@ export class ProcessingHelper {
         ];
 
         // Send to OpenAI Vision API
+        const extractionModel = config.extractionModel || "gpt-4o";
         const extractionResponse = await this.openaiClient.chat.completions.create({
-          model: config.extractionModel || "gpt-4o",
+          model: extractionModel,
           messages: messages,
-          max_tokens: 8000,
-          temperature: 0.2
+          ...this.getOpenAITokenLimitParam(extractionModel, 8000),
+          ...this.getOpenAITemperatureParam(extractionModel, 0.2)
         });
 
         // Parse the response
@@ -795,14 +816,15 @@ Your solution should be efficient, well-commented, and handle edge cases.
         }
         
         // Send to OpenAI API
+        const solutionModel = config.solutionModel || "gpt-4o";
         const solutionResponse = await this.openaiClient.chat.completions.create({
-          model: config.solutionModel || "gpt-4o",
+          model: solutionModel,
           messages: [
             { role: "system", content: "You are an expert coding interview assistant. Provide clear, optimal solutions with detailed explanations." },
             { role: "user", content: promptText }
           ],
-          max_tokens: 8000,
-          temperature: 0.2
+          ...this.getOpenAITokenLimitParam(solutionModel, 8000),
+          ...this.getOpenAITemperatureParam(solutionModel, 0.2)
         });
 
         responseContent = solutionResponse.choices[0].message.content;
@@ -1112,9 +1134,10 @@ Your solution should be efficient, well-commented, and handle edge cases.
         });
       }
 
+      const voiceModel = config.solutionModel || "gpt-4o";
       const stream = await this.openaiClient.chat.completions.create(
         {
-          model: config.solutionModel || "gpt-4o",
+          model: voiceModel,
           messages: [
             {
               role: "system",
@@ -1126,8 +1149,8 @@ Your solution should be efficient, well-commented, and handle edge cases.
               content: userContent
             }
           ],
-          max_tokens: 2500,
-          temperature: 0.2,
+          ...this.getOpenAITokenLimitParam(voiceModel, 2500),
+          ...this.getOpenAITemperatureParam(voiceModel, 0.2),
           stream: true
         },
         { signal: params.signal }
@@ -1446,11 +1469,12 @@ If you include code examples, use proper markdown code blocks with language spec
           });
         }
 
+        const debuggingModel = config.debuggingModel || "gpt-4o";
         const debugResponse = await this.openaiClient.chat.completions.create({
-          model: config.debuggingModel || "gpt-4o",
+          model: debuggingModel,
           messages: messages,
-          max_tokens: 8000,
-          temperature: 0.2
+          ...this.getOpenAITokenLimitParam(debuggingModel, 8000),
+          ...this.getOpenAITemperatureParam(debuggingModel, 0.2)
         });
         
         debugContent = debugResponse.choices[0].message.content;

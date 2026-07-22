@@ -39,6 +39,11 @@ const modelCategories: ModelCategory[] = [
     description: 'Model used to analyze screenshots and extract problem details',
     openaiModels: [
       {
+        id: "gpt-5-nano",
+        name: "gpt-5-nano",
+        description: "Fastest, most cost-effective GPT-5 option"
+      },
+      {
         id: "gpt-4o",
         name: "gpt-4o",
         description: "Best overall performance for problem extraction"
@@ -85,6 +90,11 @@ const modelCategories: ModelCategory[] = [
     description: 'Model used to generate coding solutions',
     openaiModels: [
       {
+        id: "gpt-5-nano",
+        name: "gpt-5-nano",
+        description: "Fastest, most cost-effective GPT-5 option"
+      },
+      {
         id: "gpt-4o",
         name: "gpt-4o",
         description: "Strong overall performance for coding tasks"
@@ -130,6 +140,11 @@ const modelCategories: ModelCategory[] = [
     title: 'Debugging',
     description: 'Model used to debug and improve solutions',
     openaiModels: [
+      {
+        id: "gpt-5-nano",
+        name: "gpt-5-nano",
+        description: "Fastest, most cost-effective GPT-5 option"
+      },
       {
         id: "gpt-4o",
         name: "gpt-4o",
@@ -367,7 +382,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
                   />
                   <div className="flex flex-col">
                     <p className="font-medium text-white text-sm">OpenAI</p>
-                    <p className="text-xs text-white/60">GPT-4o models</p>
+                    <p className="text-xs text-white/60">GPT models</p>
                   </div>
                 </div>
               </div>
