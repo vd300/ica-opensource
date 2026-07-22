@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import Queue from "../_pages/Queue"
 import Solutions from "../_pages/Solutions"
+import { VoiceAssistantOverlay } from "../components/VoiceAssistant/VoiceAssistantOverlay"
 import { useToast } from "../contexts/toast"
 
 interface SubscribedAppProps {
@@ -151,6 +152,7 @@ const SubscribedApp: React.FC<SubscribedAppProps> = ({
           setLanguage={setLanguage}
         />
       ) : null}
+      <VoiceAssistantOverlay />
     </div>
   )
 }

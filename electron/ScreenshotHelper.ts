@@ -368,6 +368,75 @@ export class ScreenshotHelper {
     return screenshotPath;
   }
 
+  public async captureTemporaryScreenshot(
+    hideMainWindow: () => void,
+    showMainWindow: () => void
+  ): Promise<{
+    path: string;
+    base64: string;
+    cleanup: () => Promise<void>;
+  }> {
+    console.log("Taking temporary voice screenshot");
+    hideMainWindow();
+
+    const hideDelay = process.platform === "win32" ? 500 : 300;
+    await new Promise((resolve) => setTimeout(resolve, hideDelay));
+
+    let screenshotPath = "";
+    try {
+      const screenshotBuffer = await this.captureScreenshot();
+
+      if (!screenshotBuffer || screenshotBuffer.length === 0) {
+        throw new Error("Screenshot capture returned empty buffer");
+      }
+
+      screenshotPath = path.join(this.tempDir, `voice-${uuidv4()}.png`);
+      await fs.promises.writeFile(screenshotPath, screenshotBuffer);
+
+      return {
+        path: screenshotPath,
+        base64: screenshotBuffer.toString("base64"),
+        cleanup: async () => {
+          await this.deleteTemporaryScreenshot(screenshotPath);
+        }
+      };
+    } catch (error) {
+      if (screenshotPath) {
+        await this.deleteTemporaryScreenshot(screenshotPath);
+      }
+      console.error("Temporary screenshot error:", error);
+      throw error;
+    } finally {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      showMainWindow();
+    }
+  }
+
+  private async deleteTemporaryScreenshot(screenshotPath: string): Promise<void> {
+    if (!screenshotPath) {
+      return;
+    }
+
+    const resolvedTempDir = path.resolve(this.tempDir);
+    const resolvedPath = path.resolve(screenshotPath);
+
+    if (
+      resolvedPath !== resolvedTempDir &&
+      !resolvedPath.startsWith(`${resolvedTempDir}${path.sep}`)
+    ) {
+      throw new Error(`Refusing to delete non-temporary screenshot: ${screenshotPath}`);
+    }
+
+    try {
+      if (fs.existsSync(resolvedPath)) {
+        await fs.promises.unlink(resolvedPath);
+        console.log("Deleted temporary voice screenshot:", resolvedPath);
+      }
+    } catch (error) {
+      console.warn("Failed to delete temporary voice screenshot:", error);
+    }
+  }
+
   public async getImagePreview(filepath: string): Promise<string> {
     try {
       if (!fs.existsSync(filepath)) {

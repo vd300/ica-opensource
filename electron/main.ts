@@ -1,10 +1,11 @@
-import { app, BrowserWindow, screen, shell, ipcMain } from "electron"
+import { app, BrowserWindow, screen, shell, ipcMain, session } from "electron"
 import path from "path"
 import fs from "fs"
 import { initializeIpcHandlers } from "./ipcHandlers"
 import { ProcessingHelper } from "./ProcessingHelper"
 import { ScreenshotHelper } from "./ScreenshotHelper"
 import { ShortcutsHelper } from "./shortcuts"
+import { VoiceAssistantController } from "./VoiceAssistantController"
 import { initAutoUpdater } from "./autoUpdater"
 import { configHelper } from "./ConfigHelper"
 import * as dotenv from "dotenv"
@@ -29,6 +30,7 @@ const state = {
   screenshotHelper: null as ScreenshotHelper | null,
   shortcutsHelper: null as ShortcutsHelper | null,
   processingHelper: null as ProcessingHelper | null,
+  voiceAssistantController: null as VoiceAssistantController | null,
 
   // View and state management
   view: "queue" as "queue" | "solutions" | "debug",
@@ -81,6 +83,7 @@ export interface IShortcutsHelperDeps {
   setView: (view: "queue" | "solutions" | "debug") => void
   isVisible: () => boolean
   toggleMainWindow: () => void
+  toggleVoiceMode: () => void
   moveWindowLeft: () => void
   moveWindowRight: () => void
   moveWindowUp: () => void
@@ -89,6 +92,7 @@ export interface IShortcutsHelperDeps {
 
 export interface IIpcHandlerDeps {
   getMainWindow: () => BrowserWindow | null
+  getVoiceAssistantController: () => VoiceAssistantController | null
   setWindowDimensions: (width: number, height: number) => void
   getScreenshotQueue: () => string[]
   getExtraScreenshotQueue: () => string[]
@@ -101,6 +105,7 @@ export interface IIpcHandlerDeps {
   takeScreenshot: () => Promise<string>
   getView: () => "queue" | "solutions" | "debug"
   toggleMainWindow: () => void
+  stopVoiceMode: () => void
   clearQueues: () => void
   setView: (view: "queue" | "solutions" | "debug") => void
   moveWindowLeft: () => void
@@ -129,6 +134,30 @@ function initializeHelpers() {
     getHasDebugged,
     PROCESSING_EVENTS: state.PROCESSING_EVENTS
   } as IProcessingHelperDeps)
+  state.voiceAssistantController = new VoiceAssistantController({
+    getMainWindow,
+    getVoiceSettings: () => {
+      const config = configHelper.loadConfig()
+      return {
+        enabled: config.voiceAssistantEnabled,
+        minConfidence: config.voiceTriggerConfidenceThreshold
+      }
+    },
+    hasApiKey: () => configHelper.hasApiKey(),
+    captureScreenContext,
+    streamVoiceAnswer: (params) => {
+      if (!state.processingHelper) {
+        throw new Error("Processing helper not initialized")
+      }
+
+      return state.processingHelper.streamVoiceAnswer(params)
+    }
+  })
+  configHelper.on("config-updated", (config) => {
+    if (!config.voiceAssistantEnabled) {
+      state.voiceAssistantController?.stop()
+    }
+  })
   state.shortcutsHelper = new ShortcutsHelper({
     getMainWindow,
     takeScreenshot,
@@ -138,6 +167,7 @@ function initializeHelpers() {
     setView,
     isVisible: () => state.isWindowVisible,
     toggleMainWindow,
+    toggleVoiceMode,
     moveWindowLeft: () =>
       moveWindowHorizontal((x) =>
         Math.max(-(state.windowSize?.width || 0) / 2, x - state.step)
@@ -502,6 +532,18 @@ function loadEnvVariables() {
   console.log("Environment variables loaded for open-source version")
 }
 
+function configureSessionPermissions(): void {
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return permission === "media"
+  })
+
+  session.defaultSession.setPermissionRequestHandler(
+    (_webContents, permission, callback) => {
+      callback(permission === "media")
+    }
+  )
+}
+
 // Initialize application
 async function initializeApp() {
   try {
@@ -524,6 +566,7 @@ async function initializeApp() {
     app.setPath('cache', cachePath)
       
     loadEnvVariables()
+    configureSessionPermissions()
     
     // Ensure a configuration file exists
     if (!configHelper.hasApiKey()) {
@@ -533,6 +576,7 @@ async function initializeApp() {
     initializeHelpers()
     initializeIpcHandlers({
       getMainWindow,
+      getVoiceAssistantController,
       setWindowDimensions,
       getScreenshotQueue,
       getExtraScreenshotQueue,
@@ -543,6 +587,7 @@ async function initializeApp() {
       takeScreenshot,
       getView,
       toggleMainWindow,
+      stopVoiceMode,
       clearQueues,
       setView,
       moveWindowLeft: () =>
@@ -612,9 +657,17 @@ app.on("activate", () => {
   }
 })
 
+app.on("before-quit", () => {
+  stopVoiceMode()
+})
+
 // State getter/setter functions
 function getMainWindow(): BrowserWindow | null {
   return state.mainWindow
+}
+
+function getVoiceAssistantController(): VoiceAssistantController | null {
+  return state.voiceAssistantController
 }
 
 function getView(): "queue" | "solutions" | "debug" {
@@ -647,9 +700,18 @@ function getExtraScreenshotQueue(): string[] {
 }
 
 function clearQueues(): void {
+  stopVoiceMode()
   state.screenshotHelper?.clearQueues()
   state.problemInfo = null
   setView("queue")
+}
+
+function toggleVoiceMode(): void {
+  state.voiceAssistantController?.toggle()
+}
+
+function stopVoiceMode(): void {
+  state.voiceAssistantController?.stop()
 }
 
 async function takeScreenshot(): Promise<string> {
@@ -660,6 +722,30 @@ async function takeScreenshot(): Promise<string> {
       () => showMainWindow()
     ) || ""
   )
+}
+
+async function captureScreenContext(
+  signal: AbortSignal
+): Promise<{ screenshotBase64: string; cleanup: () => Promise<void> }> {
+  if (!state.mainWindow) throw new Error("No main window available")
+  if (!state.screenshotHelper) throw new Error("Screenshot helper not initialized")
+  if (signal.aborted) throw new Error("Voice request cancelled")
+
+  const temporaryScreenshot =
+    await state.screenshotHelper.captureTemporaryScreenshot(
+      () => hideMainWindow(),
+      () => showMainWindow()
+    )
+
+  if (signal.aborted) {
+    await temporaryScreenshot.cleanup()
+    throw new Error("Voice request cancelled")
+  }
+
+  return {
+    screenshotBase64: temporaryScreenshot.base64,
+    cleanup: temporaryScreenshot.cleanup
+  }
 }
 
 async function getImagePreview(filepath: string): Promise<string> {
@@ -696,6 +782,7 @@ export {
   moveWindowHorizontal,
   moveWindowVertical,
   getMainWindow,
+  getVoiceAssistantController,
   getView,
   setView,
   getScreenshotHelper,
@@ -704,7 +791,10 @@ export {
   getScreenshotQueue,
   getExtraScreenshotQueue,
   clearQueues,
+  toggleVoiceMode,
+  stopVoiceMode,
   takeScreenshot,
+  captureScreenContext,
   getImagePreview,
   deleteScreenshot,
   setHasDebugged,

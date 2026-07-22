@@ -106,6 +106,11 @@ export class ShortcutsHelper {
       this.deps.toggleMainWindow()
     })
 
+    globalShortcut.register("CommandOrControl+I", () => {
+      console.log("Command/Ctrl + I pressed. Toggling voice mode.")
+      this.deps.toggleVoiceMode()
+    })
+
     globalShortcut.register("CommandOrControl+Q", () => {
       console.log("Command/Ctrl + Q pressed. Quitting application.")
       app.quit()

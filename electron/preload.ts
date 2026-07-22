@@ -1,5 +1,18 @@
 console.log("Preload script starting...")
 import { contextBridge, ipcRenderer } from "electron"
+import { VOICE_IPC_CHANNELS } from "./voiceIpc"
+import type {
+  VoiceAnswerChunkPayload,
+  VoiceAnswerCompletePayload,
+  VoiceAnswerStartPayload,
+  VoiceAudioChunkPayload,
+  VoiceErrorPayload,
+  VoiceIpcResult,
+  VoiceModeStatusPayload,
+  VoiceRecognitionErrorPayload,
+  VoiceTranscriptSegment,
+  VoiceTriggerDetectedPayload
+} from "../src/types/voice"
 const { shell } = require("electron")
 
 export const PROCESSING_EVENTS = {
@@ -24,6 +37,26 @@ export const PROCESSING_EVENTS = {
 
 // At the top of the file
 console.log("Preload script is running")
+
+const createIpcListener = <T>(
+  channel: string,
+  callback: (payload: T) => void
+) => {
+  const subscription = (_event: Electron.IpcRendererEvent, payload: T) =>
+    callback(payload)
+  ipcRenderer.on(channel, subscription)
+  return () => {
+    ipcRenderer.removeListener(channel, subscription)
+  }
+}
+
+const createVoidIpcListener = (channel: string, callback: () => void) => {
+  const subscription = () => callback()
+  ipcRenderer.on(channel, subscription)
+  return () => {
+    ipcRenderer.removeListener(channel, subscription)
+  }
+}
 
 const electronAPI = {
   // Original methods
@@ -205,7 +238,7 @@ const electronAPI = {
   
   // New methods for OpenAI API integration
   getConfig: () => ipcRenderer.invoke("get-config"),
-  updateConfig: (config: { apiKey?: string; model?: string; language?: string; opacity?: number }) => 
+  updateConfig: (config: Record<string, unknown>) => 
     ipcRenderer.invoke("update-config", config),
   onShowSettings: (callback: () => void) => {
     const subscription = () => callback()
@@ -236,7 +269,49 @@ const electronAPI = {
       ipcRenderer.removeListener("delete-last-screenshot", subscription)
     }
   },
-  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot")
+  deleteLastScreenshot: () => ipcRenderer.invoke("delete-last-screenshot"),
+
+  sendVoiceTranscriptSegment: (
+    segment: VoiceTranscriptSegment
+  ): Promise<VoiceIpcResult> =>
+    ipcRenderer.invoke(VOICE_IPC_CHANNELS.TRANSCRIPT_SEGMENT, segment),
+  sendVoiceAudioChunk: (
+    chunk: VoiceAudioChunkPayload
+  ): Promise<VoiceIpcResult> =>
+    ipcRenderer.invoke(VOICE_IPC_CHANNELS.AUDIO_CHUNK, chunk),
+  stopVoiceMode: (): Promise<VoiceIpcResult> =>
+    ipcRenderer.invoke(VOICE_IPC_CHANNELS.STOP),
+  voiceRendererReady: (): Promise<VoiceIpcResult> =>
+    ipcRenderer.invoke(VOICE_IPC_CHANNELS.RENDERER_READY),
+  reportVoiceRecognitionError: (
+    error: VoiceRecognitionErrorPayload
+  ): Promise<VoiceIpcResult> =>
+    ipcRenderer.invoke(VOICE_IPC_CHANNELS.RECOGNITION_ERROR, error),
+  onVoiceModeStarted: (callback: () => void) =>
+    createVoidIpcListener(VOICE_IPC_CHANNELS.MODE_STARTED, callback),
+  onVoiceModeStopped: (callback: () => void) =>
+    createVoidIpcListener(VOICE_IPC_CHANNELS.MODE_STOPPED, callback),
+  onVoiceStatus: (callback: (payload: VoiceModeStatusPayload) => void) =>
+    createIpcListener(VOICE_IPC_CHANNELS.STATUS, callback),
+  onVoiceInterimTranscript: (callback: (text: string) => void) =>
+    createIpcListener(VOICE_IPC_CHANNELS.INTERIM_TRANSCRIPT, callback),
+  onVoiceFinalTranscript: (
+    callback: (segment: VoiceTranscriptSegment) => void
+  ) => createIpcListener(VOICE_IPC_CHANNELS.FINAL_TRANSCRIPT, callback),
+  onVoiceTriggerDetected: (
+    callback: (payload: VoiceTriggerDetectedPayload) => void
+  ) => createIpcListener(VOICE_IPC_CHANNELS.TRIGGER_DETECTED, callback),
+  onVoiceAnswerStart: (
+    callback: (payload: VoiceAnswerStartPayload) => void
+  ) => createIpcListener(VOICE_IPC_CHANNELS.ANSWER_START, callback),
+  onVoiceAnswerChunk: (
+    callback: (payload: VoiceAnswerChunkPayload) => void
+  ) => createIpcListener(VOICE_IPC_CHANNELS.ANSWER_CHUNK, callback),
+  onVoiceAnswerComplete: (
+    callback: (payload: VoiceAnswerCompletePayload) => void
+  ) => createIpcListener(VOICE_IPC_CHANNELS.ANSWER_COMPLETE, callback),
+  onVoiceError: (callback: (payload: VoiceErrorPayload) => void) =>
+    createIpcListener(VOICE_IPC_CHANNELS.ERROR, callback)
 }
 
 // Before exposing the API

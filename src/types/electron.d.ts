@@ -1,3 +1,33 @@
+import type {
+  VoiceAnswerChunkPayload,
+  VoiceAnswerCompletePayload,
+  VoiceAnswerStartPayload,
+  VoiceAudioChunkPayload,
+  VoiceErrorPayload,
+  VoiceIpcResult,
+  VoiceModeStatusPayload,
+  VoiceRecognitionErrorPayload,
+  VoiceTranscriptSegment,
+  VoiceTriggerDetectedPayload
+} from "./voice"
+
+export type APIProvider = "openai" | "gemini" | "anthropic"
+export type VoiceResponseStyle = "concise" | "code-first" | "detailed"
+
+export interface AppConfig {
+  apiKey: string
+  apiProvider: APIProvider
+  extractionModel: string
+  solutionModel: string
+  debuggingModel: string
+  language: string
+  voiceAssistantEnabled: boolean
+  voiceRecognitionLanguage: string
+  voiceTriggerConfidenceThreshold: number
+  voiceResponseStyle: VoiceResponseStyle
+  opacity: number
+}
+
 export interface ElectronAPI {
   // Original methods
   openSubscriptionPortal: (authData: {
@@ -54,12 +84,45 @@ export interface ElectronAPI {
   getPlatform: () => string
   
   // New methods for OpenAI integration
-  getConfig: () => Promise<{ apiKey: string; model: string }>
-  updateConfig: (config: { apiKey?: string; model?: string }) => Promise<boolean>
+  getConfig: () => Promise<AppConfig>
+  updateConfig: (config: Partial<AppConfig>) => Promise<AppConfig>
   checkApiKey: () => Promise<boolean>
   validateApiKey: (apiKey: string) => Promise<{ valid: boolean; error?: string }>
   openLink: (url: string) => void
   onApiKeyInvalid: (callback: () => void) => () => void
+  sendVoiceTranscriptSegment: (
+    segment: VoiceTranscriptSegment
+  ) => Promise<VoiceIpcResult>
+  sendVoiceAudioChunk: (
+    chunk: VoiceAudioChunkPayload
+  ) => Promise<VoiceIpcResult>
+  stopVoiceMode: () => Promise<VoiceIpcResult>
+  voiceRendererReady: () => Promise<VoiceIpcResult>
+  reportVoiceRecognitionError: (
+    error: VoiceRecognitionErrorPayload
+  ) => Promise<VoiceIpcResult>
+  onVoiceModeStarted: (callback: () => void) => () => void
+  onVoiceModeStopped: (callback: () => void) => () => void
+  onVoiceStatus: (
+    callback: (payload: VoiceModeStatusPayload) => void
+  ) => () => void
+  onVoiceInterimTranscript: (callback: (text: string) => void) => () => void
+  onVoiceFinalTranscript: (
+    callback: (segment: VoiceTranscriptSegment) => void
+  ) => () => void
+  onVoiceTriggerDetected: (
+    callback: (payload: VoiceTriggerDetectedPayload) => void
+  ) => () => void
+  onVoiceAnswerStart: (
+    callback: (payload: VoiceAnswerStartPayload) => void
+  ) => () => void
+  onVoiceAnswerChunk: (
+    callback: (payload: VoiceAnswerChunkPayload) => void
+  ) => () => void
+  onVoiceAnswerComplete: (
+    callback: (payload: VoiceAnswerCompletePayload) => void
+  ) => () => void
+  onVoiceError: (callback: (payload: VoiceErrorPayload) => void) => () => void
   removeListener: (eventName: string, callback: (...args: any[]) => void) => void
 }
 

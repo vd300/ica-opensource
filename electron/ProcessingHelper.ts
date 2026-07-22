@@ -5,9 +5,11 @@ import { ScreenshotHelper } from "./ScreenshotHelper"
 import { IProcessingHelperDeps } from "./main"
 import * as axios from "axios"
 import { app, BrowserWindow, dialog } from "electron"
-import { OpenAI } from "openai"
+import { OpenAI, toFile } from "openai"
 import { configHelper } from "./ConfigHelper"
 import Anthropic from '@anthropic-ai/sdk';
+import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages/messages"
+import type { VoiceIntent } from "../src/types/voice"
 
 // Interface for Gemini API requests
 interface GeminiMessage {
@@ -43,6 +45,19 @@ interface AnthropicMessage {
     };
   }>;
 }
+
+interface VoiceAnswerParams {
+  requestId: string;
+  intent: VoiceIntent;
+  transcript: string;
+  screenshotBase64?: string;
+  signal: AbortSignal;
+  onChunk: (text: string) => void;
+  onComplete: (text?: string) => void;
+}
+
+type VoiceResponseStyle = "concise" | "code-first" | "detailed"
+
 export class ProcessingHelper {
   private deps: IProcessingHelperDeps
   private screenshotHelper: ScreenshotHelper
@@ -1060,6 +1075,281 @@ Your solution should be efficient, well-commented, and handle edge cases.
     }
 
     return nodes.join(" -> ");
+  }
+
+  public async streamVoiceAnswer(params: VoiceAnswerParams): Promise<void> {
+    const config = configHelper.loadConfig();
+    const language = await this.getLanguage();
+    const prompt = this.buildVoicePrompt(
+      params.intent,
+      params.transcript,
+      language,
+      config.voiceResponseStyle
+    );
+
+    this.throwIfVoiceRequestAborted(params.signal);
+
+    if (config.apiProvider === "openai") {
+      if (!this.openaiClient) {
+        this.initializeAIClient();
+      }
+
+      if (!this.openaiClient) {
+        throw new Error("OpenAI API key not configured. Please check your settings.");
+      }
+
+      const userContent: Array<
+        | { type: "text"; text: string }
+        | { type: "image_url"; image_url: { url: string } }
+      > = [{ type: "text", text: prompt }];
+
+      if (params.screenshotBase64) {
+        userContent.push({
+          type: "image_url",
+          image_url: {
+            url: `data:image/png;base64,${params.screenshotBase64}`
+          }
+        });
+      }
+
+      const stream = await this.openaiClient.chat.completions.create(
+        {
+          model: config.solutionModel || "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a concise coding interview assistant. Answer immediately with the most useful information first."
+            },
+            {
+              role: "user",
+              content: userContent
+            }
+          ],
+          max_tokens: 2500,
+          temperature: 0.2,
+          stream: true
+        },
+        { signal: params.signal }
+      );
+
+      let fullText = "";
+      for await (const chunk of stream) {
+        this.throwIfVoiceRequestAborted(params.signal);
+        const text = chunk.choices[0]?.delta?.content;
+        if (text) {
+          fullText += text;
+          params.onChunk(text);
+        }
+      }
+
+      params.onComplete(fullText);
+      return;
+    }
+
+    if (config.apiProvider === "gemini") {
+      const finalText = await this.generateVoiceAnswerWithGemini(
+        prompt,
+        params.screenshotBase64,
+        params.signal
+      );
+      params.onComplete(finalText);
+      return;
+    }
+
+    if (config.apiProvider === "anthropic") {
+      const finalText = await this.generateVoiceAnswerWithAnthropic(
+        prompt,
+        params.screenshotBase64,
+        params.signal
+      );
+      params.onComplete(finalText);
+      return;
+    }
+
+    throw new Error("Unsupported AI provider for voice answers.");
+  }
+
+  public async transcribeVoiceAudio(params: {
+    audioBase64: string;
+    mimeType: string;
+    language?: string;
+  }): Promise<string> {
+    const config = configHelper.loadConfig();
+
+    if (config.apiProvider !== "openai") {
+      throw new Error("Provider transcription fallback requires OpenAI in settings.");
+    }
+
+    if (!this.openaiClient) {
+      this.initializeAIClient();
+    }
+
+    if (!this.openaiClient) {
+      throw new Error("OpenAI API key not configured. Please check your settings.");
+    }
+
+    const audioBuffer = Buffer.from(params.audioBase64, "base64");
+    if (audioBuffer.length === 0) {
+      return "";
+    }
+
+    const extension = params.mimeType.includes("mp4")
+      ? "mp4"
+      : params.mimeType.includes("ogg")
+        ? "ogg"
+        : "webm";
+    const language = params.language?.split("-")[0]?.trim() || undefined;
+    const file = await toFile(audioBuffer, `voice.${extension}`, {
+      type: params.mimeType
+    });
+
+    const transcription = await this.openaiClient.audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+      language
+    });
+
+    return transcription.text?.trim() || "";
+  }
+
+  private buildVoicePrompt(
+    intent: VoiceIntent,
+    transcript: string,
+    language: string,
+    responseStyle: VoiceResponseStyle = "concise"
+  ): string {
+    const intentInstructions: Record<VoiceIntent, string> = {
+      solve:
+        "For a coding problem, give the approach in 1-2 lines, then provide clean code, then time and space complexity.",
+      explain:
+        "Explain the approach clearly and briefly. Prioritize what to say out loud in an interview.",
+      complexity:
+        "Focus on time complexity and space complexity. Include the reason for each bound.",
+      debug:
+        "Find likely issues in the visible code or failing output. Give the smallest concrete fix first."
+    };
+
+    const styleInstructions: Record<VoiceResponseStyle, string> = {
+      concise:
+        "Use short sections and keep the whole answer compact unless code is required.",
+      "code-first":
+        "For coding prompts, provide the code before extended explanation. Keep non-code text minimal.",
+      detailed:
+        "Include a fuller explanation with edge cases and reasoning after the direct answer."
+    };
+
+    return `You are helping with an interview practice prompt. Use the screen image and transcript.
+
+Intent: ${intent}
+Preferred language: ${language}
+Response style: ${responseStyle}
+Transcript: "${transcript}"
+
+${intentInstructions[intent]}
+${styleInstructions[responseStyle]}
+
+Respond immediately with the most useful answer first. Keep it stream-friendly and formatted in markdown.`;
+  }
+
+  private async generateVoiceAnswerWithGemini(
+    prompt: string,
+    screenshotBase64: string | undefined,
+    signal: AbortSignal
+  ): Promise<string> {
+    if (!this.geminiApiKey) {
+      this.initializeAIClient();
+    }
+
+    if (!this.geminiApiKey) {
+      throw new Error("Gemini API key not configured. Please check your settings.");
+    }
+
+    const parts: GeminiMessage["parts"] = [{ text: prompt }];
+    if (screenshotBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: "image/png",
+          data: screenshotBase64
+        }
+      });
+    }
+
+    const config = configHelper.loadConfig();
+    const response = await axios.default.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.solutionModel || "gemini-2.0-flash"}:generateContent?key=${this.geminiApiKey}`,
+      {
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2500
+        }
+      },
+      { signal }
+    );
+
+    this.throwIfVoiceRequestAborted(signal);
+
+    const responseData = response.data as GeminiResponse;
+    const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error("Empty response from Gemini API.");
+    }
+
+    return text;
+  }
+
+  private async generateVoiceAnswerWithAnthropic(
+    prompt: string,
+    screenshotBase64: string | undefined,
+    signal: AbortSignal
+  ): Promise<string> {
+    if (!this.anthropicClient) {
+      this.initializeAIClient();
+    }
+
+    if (!this.anthropicClient) {
+      throw new Error("Anthropic API key not configured. Please check your settings.");
+    }
+
+    const content: ContentBlockParam[] = [{ type: "text", text: prompt }];
+    if (screenshotBase64) {
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/png" as const,
+          data: screenshotBase64
+        }
+      });
+    }
+
+    const config = configHelper.loadConfig();
+    const response = await this.anthropicClient.messages.create(
+      {
+        model: config.solutionModel || "claude-3-7-sonnet-20250219",
+        max_tokens: 2500,
+        messages: [{ role: "user", content }],
+        temperature: 0.2
+      },
+      { signal }
+    );
+
+    this.throwIfVoiceRequestAborted(signal);
+
+    const text = (response.content[0] as { type: "text"; text: string } | undefined)
+      ?.text;
+    if (!text) {
+      throw new Error("Empty response from Anthropic API.");
+    }
+
+    return text;
+  }
+
+  private throwIfVoiceRequestAborted(signal: AbortSignal): void {
+    if (signal.aborted) {
+      throw new Error("Voice request cancelled");
+    }
   }
 
   private async processExtraScreenshotsHelper(

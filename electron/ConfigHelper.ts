@@ -12,6 +12,10 @@ interface Config {
   solutionModel: string;
   debuggingModel: string;
   language: string;
+  voiceAssistantEnabled: boolean;
+  voiceRecognitionLanguage: string;
+  voiceTriggerConfidenceThreshold: number;
+  voiceResponseStyle: "concise" | "code-first" | "detailed";
   opacity: number;
 }
 
@@ -24,6 +28,10 @@ export class ConfigHelper extends EventEmitter {
     solutionModel: "gemini-2.0-flash",
     debuggingModel: "gemini-2.0-flash",
     language: "python",
+    voiceAssistantEnabled: true,
+    voiceRecognitionLanguage: "en-US",
+    voiceTriggerConfidenceThreshold: 0.3,
+    voiceResponseStyle: "concise",
     opacity: 1.0
   };
 
@@ -110,10 +118,23 @@ export class ConfigHelper extends EventEmitter {
           config.debuggingModel = this.sanitizeModelSelection(config.debuggingModel, config.apiProvider);
         }
         
-        return {
+        const mergedConfig = {
           ...this.defaultConfig,
           ...config
         };
+
+        mergedConfig.voiceTriggerConfidenceThreshold = Math.min(
+          1,
+          Math.max(0, Number(mergedConfig.voiceTriggerConfidenceThreshold))
+        );
+        if (!["concise", "code-first", "detailed"].includes(mergedConfig.voiceResponseStyle)) {
+          mergedConfig.voiceResponseStyle = "concise";
+        }
+        if (!mergedConfig.voiceRecognitionLanguage) {
+          mergedConfig.voiceRecognitionLanguage = "en-US";
+        }
+
+        return mergedConfig;
       }
       
       // If no config exists, create a default one
@@ -203,7 +224,11 @@ export class ConfigHelper extends EventEmitter {
       // This prevents re-initializing the AI client when only opacity changes
       if (updates.apiKey !== undefined || updates.apiProvider !== undefined || 
           updates.extractionModel !== undefined || updates.solutionModel !== undefined || 
-          updates.debuggingModel !== undefined || updates.language !== undefined) {
+          updates.debuggingModel !== undefined || updates.language !== undefined ||
+          updates.voiceAssistantEnabled !== undefined ||
+          updates.voiceRecognitionLanguage !== undefined ||
+          updates.voiceTriggerConfidenceThreshold !== undefined ||
+          updates.voiceResponseStyle !== undefined) {
         this.emit('config-updated', newConfig);
       }
       

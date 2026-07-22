@@ -1,6 +1,18 @@
 /// <reference types="vite/client" />
 
 import { ToastMessage } from "./components/ui/toast"
+import type {
+  VoiceAnswerChunkPayload,
+  VoiceAnswerCompletePayload,
+  VoiceAnswerStartPayload,
+  VoiceAudioChunkPayload,
+  VoiceErrorPayload,
+  VoiceIpcResult,
+  VoiceModeStatusPayload,
+  VoiceRecognitionErrorPayload,
+  VoiceTranscriptSegment,
+  VoiceTriggerDetectedPayload
+} from "./types/voice"
 
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
@@ -59,6 +71,39 @@ interface ElectronAPI {
   installUpdate: () => void
   onUpdateAvailable: (callback: (info: any) => void) => () => void
   onUpdateDownloaded: (callback: (info: any) => void) => () => void
+  sendVoiceTranscriptSegment: (
+    segment: VoiceTranscriptSegment
+  ) => Promise<VoiceIpcResult>
+  sendVoiceAudioChunk: (
+    chunk: VoiceAudioChunkPayload
+  ) => Promise<VoiceIpcResult>
+  stopVoiceMode: () => Promise<VoiceIpcResult>
+  voiceRendererReady: () => Promise<VoiceIpcResult>
+  reportVoiceRecognitionError: (
+    error: VoiceRecognitionErrorPayload
+  ) => Promise<VoiceIpcResult>
+  onVoiceModeStarted: (callback: () => void) => () => void
+  onVoiceModeStopped: (callback: () => void) => () => void
+  onVoiceStatus: (
+    callback: (payload: VoiceModeStatusPayload) => void
+  ) => () => void
+  onVoiceInterimTranscript: (callback: (text: string) => void) => () => void
+  onVoiceFinalTranscript: (
+    callback: (segment: VoiceTranscriptSegment) => void
+  ) => () => void
+  onVoiceTriggerDetected: (
+    callback: (payload: VoiceTriggerDetectedPayload) => void
+  ) => () => void
+  onVoiceAnswerStart: (
+    callback: (payload: VoiceAnswerStartPayload) => void
+  ) => () => void
+  onVoiceAnswerChunk: (
+    callback: (payload: VoiceAnswerChunkPayload) => void
+  ) => () => void
+  onVoiceAnswerComplete: (
+    callback: (payload: VoiceAnswerCompletePayload) => void
+  ) => () => void
+  onVoiceError: (callback: (payload: VoiceErrorPayload) => void) => () => void
 }
 
 interface Window {

@@ -15,6 +15,7 @@ import {
 import { ToastContext } from "./contexts/toast"
 import { WelcomeScreen } from "./components/WelcomeScreen"
 import { SettingsDialog } from "./components/Settings/SettingsDialog"
+import type { VoiceErrorPayload } from "./types/voice"
 
 // Create a React Query client
 const queryClient = new QueryClient({
@@ -183,14 +184,26 @@ function App() {
     const onApiKeyInvalid = () => {
       showToast(
         "API Key Invalid",
-        "Your OpenAI API key appears to be invalid or has insufficient credits",
+        "Your API key appears to be invalid or has insufficient credits",
         "error"
       )
       setApiKeyDialogOpen(true)
     }
 
     // Setup API key invalid listener
-    window.electronAPI.onApiKeyInvalid(onApiKeyInvalid)
+    const unsubscribeApiKeyInvalid = window.electronAPI.onApiKeyInvalid(onApiKeyInvalid)
+    const unsubscribeVoiceError = window.electronAPI.onVoiceError((error: VoiceErrorPayload) => {
+      if (
+        error.code === "api_key_missing" ||
+        error.code === "microphone_denied" ||
+        error.code === "speech_unavailable"
+      ) {
+        showToast("Voice Assistant", error.message, "error")
+        if (error.code === "api_key_missing") {
+          setIsSettingsOpen(true)
+        }
+      }
+    })
 
     // Define a no-op handler for solution success
     const unsubscribeSolutionSuccess = window.electronAPI.onSolutionSuccess(
@@ -202,8 +215,9 @@ function App() {
 
     // Cleanup function
     return () => {
-      window.electronAPI.removeListener("API_KEY_INVALID", onApiKeyInvalid)
+      unsubscribeApiKeyInvalid()
       unsubscribeSolutionSuccess()
+      unsubscribeVoiceError()
       window.__IS_INITIALIZED__ = false
       setIsInitialized(false)
     }

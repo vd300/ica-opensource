@@ -4,9 +4,106 @@ import { ipcMain, shell, dialog } from "electron"
 import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
+import { VOICE_IPC_CHANNELS } from "./voiceIpc"
+import type {
+  VoiceIpcResult,
+  VoiceAudioChunkPayload,
+  VoiceRecognitionErrorPayload,
+  VoiceTranscriptSegment
+} from "../src/types/voice"
+
+const voiceHandlerResult = (operation: () => VoiceIpcResult): VoiceIpcResult => {
+  try {
+    return operation()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Voice IPC handler failed:", error)
+    return { success: false, error: message }
+  }
+}
 
 export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
   console.log("Initializing IPC handlers")
+
+  ipcMain.handle(
+    VOICE_IPC_CHANNELS.TRANSCRIPT_SEGMENT,
+    (_event, segment: VoiceTranscriptSegment): VoiceIpcResult =>
+      voiceHandlerResult(() => {
+        const controller = deps.getVoiceAssistantController()
+        if (!controller) {
+          return { success: false, error: "Voice controller not initialized" }
+        }
+
+        return controller.handleTranscriptSegment(segment)
+      })
+  )
+
+  ipcMain.handle(
+    VOICE_IPC_CHANNELS.AUDIO_CHUNK,
+    async (_event, chunk: VoiceAudioChunkPayload): Promise<VoiceIpcResult> => {
+      try {
+        const controller = deps.getVoiceAssistantController()
+        if (!controller) {
+          return { success: false, error: "Voice controller not initialized" }
+        }
+
+        if (!deps.processingHelper) {
+          return { success: false, error: "Processing helper not initialized" }
+        }
+
+        const text = await deps.processingHelper.transcribeVoiceAudio(chunk)
+        if (!text) {
+          return { success: true }
+        }
+
+        return controller.handleTranscriptSegment({
+          text,
+          isFinal: true,
+          confidence: 1,
+          receivedAt: Date.now()
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error("Voice audio transcription failed:", error)
+        return { success: false, error: message }
+      }
+    }
+  )
+
+  ipcMain.handle(VOICE_IPC_CHANNELS.STOP, (): VoiceIpcResult =>
+    voiceHandlerResult(() => {
+      const controller = deps.getVoiceAssistantController()
+      if (!controller) {
+        return { success: false, error: "Voice controller not initialized" }
+      }
+
+      return controller.stop()
+    })
+  )
+
+  ipcMain.handle(VOICE_IPC_CHANNELS.RENDERER_READY, (): VoiceIpcResult =>
+    voiceHandlerResult(() => {
+      const controller = deps.getVoiceAssistantController()
+      if (!controller) {
+        return { success: false, error: "Voice controller not initialized" }
+      }
+
+      return controller.syncRenderer()
+    })
+  )
+
+  ipcMain.handle(
+    VOICE_IPC_CHANNELS.RECOGNITION_ERROR,
+    (_event, error: VoiceRecognitionErrorPayload): VoiceIpcResult =>
+      voiceHandlerResult(() => {
+        const controller = deps.getVoiceAssistantController()
+        if (!controller) {
+          return { success: false, error: "Voice controller not initialized" }
+        }
+
+        return controller.handleRecognitionError(error)
+      })
+  )
 
   // Configuration handlers
   ipcMain.handle("get-config", () => {

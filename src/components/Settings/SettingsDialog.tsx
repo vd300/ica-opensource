@@ -14,6 +14,7 @@ import { Settings } from "lucide-react";
 import { useToast } from "../../contexts/toast";
 
 type APIProvider = "openai" | "gemini" | "anthropic";
+type VoiceResponseStyle = "concise" | "code-first" | "detailed";
 
 type AIModel = {
   id: string;
@@ -184,6 +185,11 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
   const [extractionModel, setExtractionModel] = useState("gpt-4o");
   const [solutionModel, setSolutionModel] = useState("gpt-4o");
   const [debuggingModel, setDebuggingModel] = useState("gpt-4o");
+  const [language, setLanguage] = useState("python");
+  const [voiceAssistantEnabled, setVoiceAssistantEnabled] = useState(true);
+  const [voiceRecognitionLanguage, setVoiceRecognitionLanguage] = useState("en-US");
+  const [voiceTriggerConfidenceThreshold, setVoiceTriggerConfidenceThreshold] = useState(0.3);
+  const [voiceResponseStyle, setVoiceResponseStyle] = useState<VoiceResponseStyle>("concise");
   const [isLoading, setIsLoading] = useState(false);
   const { showToast } = useToast();
 
@@ -213,6 +219,11 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         extractionModel?: string;
         solutionModel?: string;
         debuggingModel?: string;
+        language?: string;
+        voiceAssistantEnabled?: boolean;
+        voiceRecognitionLanguage?: string;
+        voiceTriggerConfidenceThreshold?: number;
+        voiceResponseStyle?: VoiceResponseStyle;
       }
 
       window.electronAPI
@@ -223,6 +234,15 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
           setExtractionModel(config.extractionModel || "gpt-4o");
           setSolutionModel(config.solutionModel || "gpt-4o");
           setDebuggingModel(config.debuggingModel || "gpt-4o");
+          setLanguage(config.language || "python");
+          setVoiceAssistantEnabled(config.voiceAssistantEnabled ?? true);
+          setVoiceRecognitionLanguage(config.voiceRecognitionLanguage || "en-US");
+          setVoiceTriggerConfidenceThreshold(
+            typeof config.voiceTriggerConfidenceThreshold === "number"
+              ? config.voiceTriggerConfidenceThreshold
+              : 0.3
+          );
+          setVoiceResponseStyle(config.voiceResponseStyle || "concise");
         })
         .catch((error: unknown) => {
           console.error("Failed to load config:", error);
@@ -263,6 +283,11 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         extractionModel,
         solutionModel,
         debuggingModel,
+        language,
+        voiceAssistantEnabled,
+        voiceRecognitionLanguage,
+        voiceTriggerConfidenceThreshold,
+        voiceResponseStyle,
       });
       
       if (result) {
@@ -454,6 +479,102 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
                   <p className="text-xs text-white/60">3. Create a new API key and paste it here</p>
                 </>
               )}
+            </div>
+          </div>
+
+          <div className="space-y-3 mt-4">
+            <label className="text-sm font-medium text-white">Voice Assistant</label>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-3 space-y-3">
+              <label className="flex items-center justify-between gap-3 text-sm text-white/80">
+                <span>Enable voice mode</span>
+                <input
+                  type="checkbox"
+                  checked={voiceAssistantEnabled}
+                  onChange={(e) => setVoiceAssistantEnabled(e.target.checked)}
+                  className="h-4 w-4 accent-white"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-white/60" htmlFor="language">
+                    Coding Language
+                  </label>
+                  <select
+                    id="language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white outline-none focus:border-white/25"
+                  >
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="java">Java</option>
+                    <option value="golang">Go</option>
+                    <option value="cpp">C++</option>
+                    <option value="swift">Swift</option>
+                    <option value="kotlin">Kotlin</option>
+                    <option value="ruby">Ruby</option>
+                    <option value="sql">SQL</option>
+                    <option value="r">R</option>
+                    <option value="csharp">C#</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-white/60" htmlFor="voiceRecognitionLanguage">
+                    Recognition Language
+                  </label>
+                  <select
+                    id="voiceRecognitionLanguage"
+                    value={voiceRecognitionLanguage}
+                    onChange={(e) => setVoiceRecognitionLanguage(e.target.value)}
+                    className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white outline-none focus:border-white/25"
+                  >
+                    <option value="en-US">English (US)</option>
+                    <option value="en-IN">English (India)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="en-AU">English (Australia)</option>
+                    <option value="hi-IN">Hindi (India)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs text-white/60">
+                  <label htmlFor="voiceConfidence">Trigger Confidence</label>
+                  <span>{Math.round(voiceTriggerConfidenceThreshold * 100)}%</span>
+                </div>
+                <input
+                  id="voiceConfidence"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={voiceTriggerConfidenceThreshold}
+                  onChange={(e) =>
+                    setVoiceTriggerConfidenceThreshold(Number(e.target.value))
+                  }
+                  className="w-full accent-white"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-white/60" htmlFor="voiceResponseStyle">
+                  Response Style
+                </label>
+                <select
+                  id="voiceResponseStyle"
+                  value={voiceResponseStyle}
+                  onChange={(e) =>
+                    setVoiceResponseStyle(e.target.value as VoiceResponseStyle)
+                  }
+                  className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white outline-none focus:border-white/25"
+                >
+                  <option value="concise">Concise</option>
+                  <option value="code-first">Code First</option>
+                  <option value="detailed">Detailed</option>
+                </select>
+              </div>
             </div>
           </div>
           
