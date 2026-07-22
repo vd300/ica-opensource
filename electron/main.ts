@@ -45,6 +45,7 @@ const state = {
     API_KEY_INVALID: "api-key-invalid",
     INITIAL_START: "initial-start",
     PROBLEM_EXTRACTED: "problem-extracted",
+    SOLUTION_STREAM: "solution-stream",
     SOLUTION_SUCCESS: "solution-success",
     INITIAL_SOLUTION_ERROR: "solution-error",
     DEBUG_START: "debug-start",

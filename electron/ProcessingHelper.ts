@@ -817,17 +817,54 @@ Your solution should be efficient, well-commented, and handle edge cases.
         
         // Send to OpenAI API
         const solutionModel = config.solutionModel || "gpt-4o";
-        const solutionResponse = await this.openaiClient.chat.completions.create({
-          model: solutionModel,
-          messages: [
-            { role: "system", content: "You are an expert coding interview assistant. Provide clear, optimal solutions with detailed explanations." },
-            { role: "user", content: promptText }
-          ],
-          ...this.getOpenAITokenLimitParam(solutionModel, 8000),
-          ...this.getOpenAITemperatureParam(solutionModel, 0.2)
-        });
+        const stream = await this.openaiClient.chat.completions.create(
+          {
+            model: solutionModel,
+            messages: [
+              { role: "system", content: "You are an expert coding interview assistant. Provide clear, optimal solutions with detailed explanations." },
+              { role: "user", content: promptText }
+            ],
+            ...this.getOpenAITokenLimitParam(solutionModel, 8000),
+            ...this.getOpenAITemperatureParam(solutionModel, 0.2),
+            stream: true
+          },
+          { signal }
+        );
 
-        responseContent = solutionResponse.choices[0].message.content;
+        let pendingStreamText = "";
+        let lastStreamEmitAt = 0;
+        const flushStreamText = () => {
+          if (!mainWindow || pendingStreamText.length === 0) {
+            return;
+          }
+
+          mainWindow.webContents.send(
+            this.deps.PROCESSING_EVENTS.SOLUTION_STREAM,
+            pendingStreamText
+          );
+          pendingStreamText = "";
+          lastStreamEmitAt = Date.now();
+        };
+
+        for await (const chunk of stream) {
+          if (signal.aborted) {
+            throw new Error("Processing was canceled by the user.");
+          }
+
+          const text = chunk.choices[0]?.delta?.content;
+          if (!text) {
+            continue;
+          }
+
+          responseContent += text;
+          pendingStreamText += text;
+
+          if (Date.now() - lastStreamEmitAt > 100) {
+            flushStreamText();
+          }
+        }
+
+        flushStreamText();
       } else if (config.apiProvider === "gemini")  {
         // Gemini processing
         if (!this.geminiApiKey) {

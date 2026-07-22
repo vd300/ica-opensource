@@ -103,6 +103,17 @@ const SolutionSection = ({
   )
 }
 
+const StreamingAnswerSection = ({ content }: { content: string }) => (
+  <div className="space-y-2">
+    <h2 className="text-[13px] font-medium text-white tracking-wide">
+      Live Answer
+    </h2>
+    <pre className="text-[12px] leading-5 text-gray-100 bg-white/5 rounded-md p-3 whitespace-pre-wrap break-words overflow-x-auto max-w-full">
+      {content}
+    </pre>
+  </div>
+)
+
 export const ComplexitySection = ({
   timeComplexity,
   spaceComplexity,
@@ -236,6 +247,7 @@ const Solutions: React.FC<SolutionsProps> = ({
   const [problemStatementData, setProblemStatementData] =
     useState<ProblemStatementData | null>(null)
   const [solutionData, setSolutionData] = useState<string | null>(null)
+  const [solutionStreamData, setSolutionStreamData] = useState("")
   const [thoughtsData, setThoughtsData] = useState<string[] | null>(null)
   const [timeComplexityData, setTimeComplexityData] = useState<string | null>(
     null
@@ -363,6 +375,7 @@ const Solutions: React.FC<SolutionsProps> = ({
       window.electronAPI.onSolutionStart(() => {
         // Every time processing starts, reset relevant states
         setSolutionData(null)
+        setSolutionStreamData("")
         setThoughtsData(null)
         setTimeComplexityData(null)
         setSpaceComplexityData(null)
@@ -376,6 +389,9 @@ const Solutions: React.FC<SolutionsProps> = ({
       }),
       window.electronAPI.onProblemExtracted((data: ProblemStatementData) => {
         queryClient.setQueryData(["problem_statement"], data)
+      }),
+      window.electronAPI.onSolutionStream((chunk: string) => {
+        setSolutionStreamData((current) => current + chunk)
       }),
       //if there was an error processing the initial solution
       window.electronAPI.onSolutionError((error: string) => {
@@ -433,6 +449,7 @@ const Solutions: React.FC<SolutionsProps> = ({
 
         queryClient.setQueryData(["solution"], solutionData)
         setSolutionData(solutionData.code || null)
+        setSolutionStreamData("")
         setThoughtsData(solutionData.thoughts || null)
         setTimeComplexityData(solutionData.time_complexity || null)
         setSpaceComplexityData(solutionData.space_complexity || null)
@@ -633,6 +650,9 @@ const Solutions: React.FC<SolutionsProps> = ({
                           Generating solutions...
                         </p>
                       </div>
+                    )}
+                    {solutionStreamData && (
+                      <StreamingAnswerSection content={solutionStreamData} />
                     )}
                   </>
                 )}

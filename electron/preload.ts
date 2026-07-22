@@ -25,6 +25,7 @@ export const PROCESSING_EVENTS = {
   //states for generating the initial solution
   INITIAL_START: "initial-start",
   PROBLEM_EXTRACTED: "problem-extracted",
+  SOLUTION_STREAM: "solution-stream",
   SOLUTION_SUCCESS: "solution-success",
   INITIAL_SOLUTION_ERROR: "solution-error",
   RESET: "reset",
@@ -160,6 +161,13 @@ const electronAPI = {
         PROCESSING_EVENTS.PROBLEM_EXTRACTED,
         subscription
       )
+    }
+  },
+  onSolutionStream: (callback: (chunk: string) => void) => {
+    const subscription = (_: any, chunk: string) => callback(chunk)
+    ipcRenderer.on(PROCESSING_EVENTS.SOLUTION_STREAM, subscription)
+    return () => {
+      ipcRenderer.removeListener(PROCESSING_EVENTS.SOLUTION_STREAM, subscription)
     }
   },
   onSolutionSuccess: (callback: (data: any) => void) => {
