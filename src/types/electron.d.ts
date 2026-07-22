@@ -103,6 +103,7 @@ export interface ElectronAPI {
   ) => Promise<VoiceIpcResult>
   onVoiceModeStarted: (callback: () => void) => () => void
   onVoiceModeStopped: (callback: () => void) => () => void
+  onVoiceSubmitRecording: (callback: () => void) => () => void
   onVoiceStatus: (
     callback: (payload: VoiceModeStatusPayload) => void
   ) => () => void

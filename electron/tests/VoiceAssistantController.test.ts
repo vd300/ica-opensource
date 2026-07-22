@@ -147,7 +147,7 @@ test("controller debounces duplicate final transcripts", async () => {
   assert.equal(captures, 2)
 })
 
-test("controller returns to listening after a completed answer", async () => {
+test("controller stays complete after a submitted answer", async () => {
   const events: SentEvent[] = []
 
   const controller = new VoiceAssistantController({
@@ -165,15 +165,50 @@ test("controller returns to listening after a completed answer", async () => {
   await flushAsyncWork()
 
   assert.equal(controller.getState().enabled, true)
-  assert.equal(controller.getState().status, "listening")
-  assert.equal(controller.getState().activeIntent, null)
-  assert.equal(controller.getState().requestId, null)
+  assert.equal(controller.getState().status, "complete")
   assert.ok(
     events.some(
       (event) =>
         event.channel === VOICE_IPC_CHANNELS.STATUS &&
-        (event.payload as { status?: string }).status === "listening"
+        (event.payload as { status?: string }).status === "complete"
     )
+  )
+})
+
+test("controller can restart recording while voice session is open", () => {
+  const events: SentEvent[] = []
+
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 })
+  })
+
+  controller.start()
+  controller.start()
+
+  assert.equal(controller.getState().enabled, true)
+  assert.equal(controller.getState().status, "listening")
+  assert.equal(
+    events.filter((event) => event.channel === VOICE_IPC_CHANNELS.MODE_STARTED)
+      .length,
+    2
+  )
+})
+
+test("controller requests renderer transcript submission", () => {
+  const events: SentEvent[] = []
+
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 })
+  })
+
+  assert.equal(controller.submitRecording().success, false)
+
+  controller.start()
+  assert.equal(controller.submitRecording().success, true)
+  assert.ok(
+    events.some((event) => event.channel === VOICE_IPC_CHANNELS.SUBMIT_RECORDING)
   )
 })
 

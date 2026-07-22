@@ -1,7 +1,7 @@
 # Voice Interview Assistant - Implementation Design
 
 ## Summary
-Implement a voice mode as a small feature slice across Electron main, preload, and React renderer. The mode is controlled by a global shortcut, captures live transcript in the renderer, detects interview intents in the main process, captures the current screen with the existing screenshot helper, and streams a compact answer back to an overlay.
+Implement a voice mode as a small feature slice across Electron main, preload, and React renderer. Recording is started with a global shortcut and submitted with a separate shortcut, then the app detects interview intents in the main process, captures the current screen with the existing screenshot helper, and streams a compact answer back to an overlay.
 
 The implementation should not reuse the current two-step extraction-then-solution path as-is for voice. That path is high quality, but it waits for a complete extraction result before producing a complete solution. Voice mode needs a fast path that starts emitting text as soon as the model returns chunks.
 
@@ -9,7 +9,7 @@ The implementation should not reuse the current two-step extraction-then-solutio
 - The feature is for interview practice or live assistance only when the user is permitted to use such assistance.
 - Do not store raw interview audio by default.
 - Do not bypass microphone, screen capture, operating-system, interview, employer, classroom, or platform permissions.
-- Register `CommandOrControl+I` for the MVP. Electron accelerators do not reliably distinguish physical left control, so true `Left Ctrl + I` support requires a later native keyboard hook.
+- Register `CommandOrControl+I` to start recording and `CommandOrControl+7` to submit/stop recording for the MVP. Electron accelerators do not reliably distinguish physical left control, so true `Left Ctrl` support requires a later native keyboard hook.
 - Keep voice-triggered screenshots temporary and out of the normal screenshot queue by default.
 
 ## Existing Integration Points
@@ -56,8 +56,9 @@ interface VoiceSessionState {
 ```
 
 Responsibilities:
-- Toggle voice mode.
-- Send start/stop events to the renderer.
+- Start voice recording.
+- Request recording submission.
+- Send start/submit/stop events to the renderer.
 - Receive transcript segments.
 - Detect stable trigger intent.
 - Debounce duplicate triggers.
@@ -66,7 +67,7 @@ Responsibilities:
 - Forward answer chunks, completion, and errors.
 
 ### Shortcut Registration
-Add `CommandOrControl+I` in `electron/shortcuts.ts` and delegate to `deps.toggleVoiceMode()`.
+Add `CommandOrControl+I` in `electron/shortcuts.ts` and delegate to `deps.startVoiceMode()`. Add `CommandOrControl+7` and delegate to `deps.submitVoiceRecording()`.
 
 Electron accelerators do not reliably distinguish left vs right control. If physical `Left Ctrl` is a hard requirement, add a native keyboard hook later. For the first implementation, document the fallback and use `CommandOrControl+I` to match the existing shortcut style.
 
@@ -74,7 +75,8 @@ Electron accelerators do not reliably distinguish left vs right control. If phys
 Extend `IShortcutsHelperDeps` in `electron/main.ts`:
 
 ```ts
-toggleVoiceMode: () => void
+startVoiceMode: () => void
+submitVoiceRecording: () => void
 ```
 
 Add `voiceAssistantController` to application state and initialize it after `ProcessingHelper` and `ScreenshotHelper`.
@@ -91,6 +93,7 @@ Renderer invokes:
 Main sends:
 - `voice:mode-started`
 - `voice:mode-stopped`
+- `voice:submit-recording`
 - `voice:status`
 - `voice:interim-transcript`
 - `voice:final-transcript`
@@ -135,9 +138,10 @@ Behavior:
 - Start recognition when `voice:mode-started` arrives.
 - Stop recognition when `voice:mode-stopped` arrives or the overlay stop button is clicked.
 - Use continuous recognition and interim results when supported.
-- Send final segments to main for intent detection.
+- Buffer final segments locally during recording.
 - Send interim text to overlay state directly for immediate visual feedback.
-- Buffer final transcript fragments for a short stability window before sending them to main, so natural pauses do not truncate questions such as "how do you scale a service ... to handle ... 1 million requests".
+- When `voice:submit-recording` arrives, submit the accumulated final transcript plus the latest interim transcript to main, then stop microphone capture.
+- In provider transcription fallback mode, record audio continuously until `voice:submit-recording`; do not auto-stop or transcribe on fixed time slices.
 - Surface permission and availability errors through `voice:recognition-error`.
 
 If Web Speech API is unavailable, show a clear overlay error and leave the feature in a stopped state. A provider transcription fallback can be implemented in a later phase.
@@ -155,7 +159,7 @@ const INTENT_PATTERNS = [
 ```
 
 Trigger rules:
-- Only trigger on final transcript segments after the renderer's stability window has merged pause-fragmented speech.
+- Only trigger on the explicit submitted final transcript.
 - Ignore low-confidence segments when confidence is available.
 - Debounce for 4-6 seconds after a trigger.
 - Do not start a second request while one is already active unless the user explicitly cancels.
@@ -267,7 +271,7 @@ Do not add a large landing-style explanation. This is an operational overlay, so
 Use one `AbortController` per voice answer request in `VoiceAssistantController`.
 
 Cancel when:
-- user toggles voice mode off,
+- user stops voice mode,
 - user clicks stop,
 - app reset is triggered,
 - renderer reports microphone failure,
@@ -287,12 +291,13 @@ Unit-level:
 - Controller cancels active request on stop.
 
 Integration-level:
-- Shortcut sends start/stop events.
+- Shortcuts send start and submit events.
 - Preload exposes voice methods and listeners.
 - Overlay renders each status and cleans listeners on unmount.
 
 Manual QA:
 - Start app and press `Ctrl + I`.
+- Speak a pause-heavy question, press `Ctrl + 7`, and verify the full accumulated transcript is submitted.
 - Deny microphone permission and verify visible error.
 - Say "solve this" over a visible coding problem and verify exactly one request starts.
 - Confirm answer text appears progressively for OpenAI streaming.

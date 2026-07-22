@@ -214,6 +214,17 @@ export class VoiceAssistantController {
     return this.state.enabled ? this.stop() : this.start()
   }
 
+  public submitRecording(): VoiceIpcResult {
+    if (!this.state.enabled) {
+      return { success: false, error: "Voice mode is not enabled" }
+    }
+
+    this.send(VOICE_IPC_CHANNELS.SUBMIT_RECORDING)
+    this.sendStatus("Submitting voice prompt...")
+
+    return { success: true }
+  }
+
   public start(): VoiceIpcResult {
     if (!this.getVoiceSettings().enabled) {
       const error = {
@@ -227,6 +238,20 @@ export class VoiceAssistantController {
     }
 
     if (this.state.enabled) {
+      if (this.state.activeAbortController) {
+        this.sendStatus("Wait for the current voice answer to finish, or stop voice mode.")
+        return { success: true }
+      }
+
+      this.state = {
+        ...this.state,
+        status: "listening",
+        lastTranscript: "",
+        activeIntent: null,
+        requestId: null,
+        lastTriggeredText: null
+      }
+      this.send(VOICE_IPC_CHANNELS.MODE_STARTED)
       this.sendStatus()
       return { success: true }
     }
@@ -441,9 +466,8 @@ export class VoiceAssistantController {
 
     this.state = {
       ...this.state,
-      status: this.state.enabled ? "listening" : "complete",
-      activeIntent: this.state.enabled ? null : this.state.activeIntent,
-      requestId: this.state.enabled ? null : payload.requestId,
+      status: "complete",
+      requestId: payload.requestId,
       activeAbortController: null
     }
 

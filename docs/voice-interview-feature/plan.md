@@ -1,7 +1,7 @@
 # Voice Interview Assistant - Product Plan
 
 ## Purpose
-Add an opt-in voice interview assistant mode that can be started with `Left Ctrl + I` during an interview practice session or a permitted live-assistance session. Once active, the app listens to interviewer speech, detects action-oriented prompts such as "solve this", captures the current screen context, and starts showing a generated answer as quickly as possible.
+Add an opt-in voice interview assistant mode that can be started with `Left Ctrl + I` during an interview practice session or a permitted live-assistance session. Once active, the app records interviewer speech until the user presses `Ctrl + 7`, then submits the transcript, captures the current screen context, and starts showing a generated answer as quickly as possible.
 
 The primary product requirement is low time-to-first-answer. The UI should display useful partial output as soon as the model starts responding instead of waiting for the complete solution payload.
 
@@ -14,8 +14,9 @@ Today the app is screenshot-first:
 For voice-led interviews, the user may hear prompts like "solve this", "explain your approach", or "what is the complexity". The app needs a faster interactive mode that combines live speech recognition, current screen analysis, and streaming answer display.
 
 ## Goals
-- Register `Left Ctrl + I` as the voice mode toggle on Windows/Linux, with the closest reliable Electron accelerator fallback when physical left/right modifier detection is unavailable.
-- Start and stop a voice assistant session from a global shortcut.
+- Register `Left Ctrl + I` as the voice recording start shortcut on Windows/Linux, with the closest reliable Electron accelerator fallback when physical left/right modifier detection is unavailable.
+- Register `Ctrl + 7` as the voice recording submit/stop shortcut.
+- Start recording and submit recording from separate global shortcuts.
 - Capture interviewer speech with interim and final transcript updates.
 - Normalize common software-engineering speech-recognition errors before intent detection, including language, backend, distributed-systems, and data-system vocabulary such as `GIL`, `Kafka`, and `REST API`.
 - Detect trigger phrases such as "solve this" and infer related intents like explanation, debugging, or complexity discussion.
@@ -36,33 +37,35 @@ For voice-led interviews, the user may hear prompts like "solve this", "explain 
 
 ## Phase 0 Decisions
 - Safety framing: the feature is documented as an opt-in practice or permitted-assistance workflow and must follow the repository ethical-use guidance in `README.md`.
-- Shortcut: use `CommandOrControl+I` for the MVP because Electron global accelerators do not reliably distinguish physical left control from right control.
+- Shortcut: use `CommandOrControl+I` to start recording and `CommandOrControl+7` to submit/stop recording for the MVP because Electron global accelerators do not reliably distinguish physical left control from right control.
 - Screen context: keep voice-triggered screenshots temporary by default and delete them after the voice request completes, is cancelled, or errors.
 
 ## Primary Flow
 1. User presses `Left Ctrl + I`.
-2. Main process toggles voice mode and sends `voice:mode-started` to the renderer.
+2. Main process starts voice recording and sends `voice:mode-started` to the renderer.
 3. Renderer opens a compact voice overlay and requests microphone access.
 4. Speech recognition begins and streams interim transcript text.
-5. Final transcript fragments are buffered briefly so pause-heavy speech is merged before being sent to the main process.
-6. Main process detects intent, for example "solve this".
-7. Main process takes a fresh screenshot using the existing screenshot helper path.
-8. Voice answer generation starts with a compact prompt containing:
+5. Final and interim transcript fragments are buffered while recording continues.
+6. User presses `Ctrl + 7`.
+7. Renderer submits the accumulated transcript to the main process and stops microphone capture.
+8. Main process detects intent, for example "solve this".
+9. Main process takes a fresh screenshot using the existing screenshot helper path.
+10. Voice answer generation starts with a compact prompt containing:
    - detected user intent,
    - latest transcript segment,
    - preferred programming language,
    - current screen image.
-9. First model chunks are sent to the renderer immediately.
-10. Renderer updates the same answer panel progressively until `voice:answer-complete`.
-11. User stops voice mode with `Left Ctrl + I`, a stop button, or reset.
+11. First model chunks are sent to the renderer immediately.
+12. Renderer updates the same answer panel progressively until `voice:answer-complete`.
+13. User starts another recording with `Left Ctrl + I`, or stops voice mode with the overlay stop button or reset.
 
 ## UX Requirements
 - The overlay must be compact and readable at the app's current opacity and size.
 - The first visible state should make it clear whether the app is listening, thinking, answering, or blocked by a permission/API error.
 - Interim transcript text should be visible but visually secondary.
-- Final transcript handling should tolerate natural pauses and filler words without truncating the question before the user finishes.
+- Final transcript handling should tolerate natural pauses and filler words by waiting for the explicit submit shortcut instead of guessing when the user is finished.
 - Streaming answer text should not cause layout jumps that resize the Electron window aggressively.
-- The stop action should be available in the overlay and through the same shortcut.
+- The stop action should be available in the overlay; recording submission should be available through `Ctrl + 7`.
 - The overlay should not hide existing solution content; it can sit above the current page with a constrained max height.
 
 ## Intent Coverage
@@ -127,11 +130,12 @@ Add settings only when the MVP path is stable:
 - Preferred response style: concise, detailed, or code-first.
 
 ## Acceptance Criteria
-- Pressing `Left Ctrl + I` toggles voice mode without breaking existing shortcuts.
+- Pressing `Left Ctrl + I` starts voice recording without breaking existing shortcuts.
+- Pressing `Ctrl + 7` submits the accumulated transcript and stops microphone capture.
 - The overlay shows listening state and transcript updates.
 - A phrase like "solve this" triggers one request, not repeated duplicate requests.
 - A phrase like "what is JIL in Python" is normalized and answered as "what is GIL in Python".
-- A clearly unrelated freeform question does not trigger an answer request.
+- Clearly unrelated questions may receive a short software-engineering-scope decline from the answer layer.
 - The feature captures a fresh screen image automatically.
 - The first answer chunk appears before the full answer is complete for providers that support streaming.
 - Stop/cancel ends microphone listening and aborts in-flight model requests.

@@ -2,7 +2,7 @@
 
 ## Phase 0 - Product and Safety Framing
 - [x] Confirm the feature is documented as practice/permitted assistance and follows the repository ethical-use guidance.
-- [x] Decide whether `CommandOrControl+I` is acceptable for MVP, since Electron accelerators do not reliably distinguish physical left control.
+- [x] Decide whether `CommandOrControl+I` and `CommandOrControl+7` are acceptable for MVP, since Electron accelerators do not reliably distinguish physical left control.
 - [x] Decide whether voice screenshots should be temporary only or visible in the existing screenshot queue.
 
 ## Phase 1 - Types and Contracts
@@ -14,7 +14,7 @@
 ## Phase 2 - Main Process Controller
 - [x] Create `electron/VoiceAssistantController.ts`.
 - [x] Add session state: enabled, status, last transcript, active intent, request id, active abort controller, and debounce timestamp.
-- [x] Implement `toggle()`, `start()`, `stop()`, `handleTranscriptSegment()`, and `handleRecognitionError()`.
+- [x] Implement `toggle()`, `start()`, `submitRecording()`, `stop()`, `handleTranscriptSegment()`, and `handleRecognitionError()`.
 - [x] Add deterministic intent detection for solve, explain, complexity, and debug phrases.
 - [x] Normalize common technical speech-recognition misses and pause artifacts before intent detection and answer generation.
 - [x] Route explicit freeform questions to the answer layer instead of relying on an exhaustive software-engineering vocabulary allowlist.
@@ -24,8 +24,8 @@
 ## Phase 3 - Shortcut and Lifecycle Wiring
 - [x] Add `voiceAssistantController` to `electron/main.ts` state.
 - [x] Initialize the controller after screenshot and processing helpers.
-- [x] Extend `IShortcutsHelperDeps` with `toggleVoiceMode`.
-- [x] Register `CommandOrControl+I` in `electron/shortcuts.ts`.
+- [x] Extend `IShortcutsHelperDeps` with start and submit voice recording actions.
+- [x] Register `CommandOrControl+I` and `CommandOrControl+7` in `electron/shortcuts.ts`.
 - [x] Stop voice mode during reset and app shutdown.
 
 ## Phase 4 - IPC Handlers
@@ -41,7 +41,8 @@
 - [x] Start recognition on `voice:mode-started`.
 - [x] Stop recognition on `voice:mode-stopped`.
 - [x] Enable continuous recognition and interim results where supported.
-- [x] Buffer pause-fragmented final transcript segments before sending them to the main process.
+- [x] Buffer pause-fragmented transcript segments until `voice:submit-recording`.
+- [x] Submit the accumulated transcript and stop microphone capture on `CommandOrControl+7`.
 - [x] Show interim transcript locally for immediate user feedback.
 - [x] Report unavailable speech recognition and microphone permission errors.
 
@@ -82,19 +83,22 @@
 ## Phase 10 - Tests and QA
 - [x] Unit test intent matching.
 - [x] Unit test transcript normalization for technical terms such as `GIL` and pause artifacts.
-- [x] Unit test that unrelated freeform questions do not trigger answers.
+- [x] Unit test that explicit freeform questions reach the answer layer for semantic scope handling.
 - [x] Unit test debounce behavior.
+- [x] Unit test recording restart and submit request behavior.
 - [x] Unit test controller cancellation.
 - [x] Type-check preload and `window.electronAPI` additions.
 - [x] Run `npm run lint`.
-- [ ] Manually verify `Ctrl + I` starts and stops voice mode.
+- [ ] Manually verify `Ctrl + I` starts voice recording.
+- [ ] Manually verify `Ctrl + 7` submits the transcript and stops microphone capture.
 - [ ] Manually verify microphone denial produces a recoverable error.
 - [ ] Manually verify a clear assistance request, such as "answer this question", triggers exactly one answer request.
 - [ ] Manually verify answer chunks appear before completion for OpenAI.
 - [ ] Manually verify stopping during generation prevents later chunks from rendering.
 
 ## MVP Completion Criteria
-- `Ctrl + I` toggles voice mode.
+- `Ctrl + I` starts voice recording.
+- `Ctrl + 7` submits the transcript.
 - Voice overlay opens and displays live transcript.
 - A clear assistance request triggers current-screen analysis.
 - At least OpenAI responses stream partial text to the overlay.

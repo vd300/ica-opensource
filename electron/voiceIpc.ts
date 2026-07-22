@@ -6,6 +6,7 @@ export const VOICE_IPC_CHANNELS = {
   RECOGNITION_ERROR: "voice:recognition-error",
   MODE_STARTED: "voice:mode-started",
   MODE_STOPPED: "voice:mode-stopped",
+  SUBMIT_RECORDING: "voice:submit-recording",
   STATUS: "voice:status",
   INTERIM_TRANSCRIPT: "voice:interim-transcript",
   FINAL_TRANSCRIPT: "voice:final-transcript",

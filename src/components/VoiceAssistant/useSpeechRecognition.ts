@@ -63,8 +63,6 @@ const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructor | null 
   )
 }
 
-const FINAL_TRANSCRIPT_STABILITY_MS = 1600
-
 const getSupportedAudioMimeType = (): string => {
   const options = [
     "audio/webm;codecs=opus",
@@ -137,10 +135,10 @@ export function useSpeechRecognition(
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
-  const providerSegmentTimerRef = useRef<number | null>(null)
-  const finalSegmentTimerRef = useRef<number | null>(null)
+  const providerSubmitRequestedRef = useRef(false)
   const finalSegmentBufferRef = useRef("")
   const finalSegmentConfidenceRef = useRef<number | undefined>(undefined)
+  const interimTranscriptRef = useRef("")
   const shouldListenRef = useRef(false)
   const isListeningRef = useRef(false)
   const [state, setState] = useState<UseSpeechRecognitionState>({
@@ -168,17 +166,10 @@ export function useSpeechRecognition(
     []
   )
 
-  const clearFinalSegmentTimer = useCallback(() => {
-    if (finalSegmentTimerRef.current !== null) {
-      window.clearTimeout(finalSegmentTimerRef.current)
-      finalSegmentTimerRef.current = null
-    }
-  }, [])
-
   const flushBufferedFinalTranscript = useCallback(() => {
-    clearFinalSegmentTimer()
-
-    const text = finalSegmentBufferRef.current.trim()
+    const text = `${finalSegmentBufferRef.current} ${interimTranscriptRef.current}`
+      .replace(/\s+/g, " ")
+      .trim()
     if (!text) {
       return
     }
@@ -186,6 +177,7 @@ export function useSpeechRecognition(
     const confidence = finalSegmentConfidenceRef.current
     finalSegmentBufferRef.current = ""
     finalSegmentConfidenceRef.current = undefined
+    interimTranscriptRef.current = ""
 
     setState((current) => ({
       ...current,
@@ -199,7 +191,7 @@ export function useSpeechRecognition(
       confidence,
       receivedAt: Date.now()
     })
-  }, [clearFinalSegmentTimer])
+  }, [])
 
   const bufferFinalTranscript = useCallback(
     (text: string, confidence?: number) => {
@@ -213,13 +205,8 @@ export function useSpeechRecognition(
         finalTranscript: finalSegmentBufferRef.current,
         interimTranscript: ""
       }))
-
-      clearFinalSegmentTimer()
-      finalSegmentTimerRef.current = window.setTimeout(() => {
-        flushBufferedFinalTranscript()
-      }, FINAL_TRANSCRIPT_STABILITY_MS)
     },
-    [clearFinalSegmentTimer, flushBufferedFinalTranscript]
+    []
   )
 
   const cleanupRecognition = useCallback(() => {
@@ -235,14 +222,10 @@ export function useSpeechRecognition(
   }, [])
 
   const cleanupProviderTranscription = useCallback(() => {
-    if (providerSegmentTimerRef.current !== null) {
-      window.clearTimeout(providerSegmentTimerRef.current)
-      providerSegmentTimerRef.current = null
-    }
-
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== "inactive") {
       try {
+        providerSubmitRequestedRef.current = false
         recorder.stop()
       } catch (error) {
         console.error("Failed to stop provider transcription recorder:", error)
@@ -253,6 +236,33 @@ export function useSpeechRecognition(
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
     mediaStreamRef.current = null
   }, [])
+
+  const submitProviderTranscription = useCallback(() => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder) {
+      return false
+    }
+
+    providerSubmitRequestedRef.current = true
+    shouldListenRef.current = false
+
+    try {
+      if (recorder.state === "recording") {
+        recorder.requestData?.()
+        recorder.stop()
+      }
+    } catch (error) {
+      providerSubmitRequestedRef.current = false
+      reportError(
+        "microphone_denied",
+        error instanceof Error
+          ? error.message
+          : "Microphone recording failed to stop."
+      )
+    }
+
+    return true
+  }, [reportError])
 
   const startProviderTranscription = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -307,16 +317,12 @@ export function useSpeechRecognition(
       }
 
       recorder.onstop = async () => {
-        if (providerSegmentTimerRef.current !== null) {
-          window.clearTimeout(providerSegmentTimerRef.current)
-          providerSegmentTimerRef.current = null
-        }
-
-        const shouldContinue = shouldListenRef.current
+        const shouldSubmit = providerSubmitRequestedRef.current
+        providerSubmitRequestedRef.current = false
         const segmentChunks = audioChunks
         audioChunks = []
 
-        if (segmentChunks.length > 0 && shouldContinue) {
+        if (segmentChunks.length > 0 && shouldSubmit) {
           const audioBlob = new Blob(segmentChunks, {
             type: recorder.mimeType || mimeType || "audio/webm"
           })
@@ -345,25 +351,9 @@ export function useSpeechRecognition(
           }
         }
 
-        if (shouldContinue) {
-          try {
-            recorder.start()
-            providerSegmentTimerRef.current = window.setTimeout(() => {
-              if (recorder.state === "recording") {
-                recorder.stop()
-              }
-            }, 5000)
-          } catch (error) {
-            reportError(
-              "microphone_denied",
-              error instanceof Error
-                ? error.message
-                : "Microphone recording failed to restart."
-            )
-          }
-          return
-        }
-
+        mediaRecorderRef.current = null
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop())
+        mediaStreamRef.current = null
         isListeningRef.current = false
         setState((current) => ({
           ...current,
@@ -372,11 +362,6 @@ export function useSpeechRecognition(
       }
 
       recorder.start()
-      providerSegmentTimerRef.current = window.setTimeout(() => {
-        if (recorder.state === "recording") {
-          recorder.stop()
-        }
-      }, 5000)
       isListeningRef.current = true
       setState((current) => ({
         ...current,
@@ -395,9 +380,9 @@ export function useSpeechRecognition(
   const stopRecognition = useCallback((resetBufferedTranscript = true) => {
     shouldListenRef.current = false
     if (resetBufferedTranscript) {
-      clearFinalSegmentTimer()
       finalSegmentBufferRef.current = ""
       finalSegmentConfidenceRef.current = undefined
+      interimTranscriptRef.current = ""
     }
     const recognition = recognitionRef.current
 
@@ -417,9 +402,9 @@ export function useSpeechRecognition(
       isListening: false,
       interimTranscript: ""
     }))
-  }, [cleanupProviderTranscription, cleanupRecognition, clearFinalSegmentTimer])
+  }, [cleanupProviderTranscription, cleanupRecognition])
 
-  const startRecognition = useCallback(() => {
+  const startRecognition = useCallback((preserveBufferedTranscript = false) => {
     const startRecognitionAsync = async () => {
     const CurrentRecognitionConstructor = getSpeechRecognitionConstructor()
 
@@ -429,7 +414,7 @@ export function useSpeechRecognition(
       return
     }
 
-    stopRecognition(false)
+    stopRecognition(!preserveBufferedTranscript)
     shouldListenRef.current = true
     const config = await window.electronAPI.getConfig().catch(() => null)
     const recognitionLanguage = config?.voiceRecognitionLanguage || language
@@ -455,6 +440,7 @@ export function useSpeechRecognition(
         }
 
         if (result.isFinal) {
+          interimTranscriptRef.current = ""
           bufferFinalTranscript(transcript, bestAlternative.confidence)
         } else {
           interimTranscript = `${interimTranscript} ${transcript}`.trim()
@@ -462,6 +448,7 @@ export function useSpeechRecognition(
       }
 
       if (interimTranscript) {
+        interimTranscriptRef.current = interimTranscript
         setState((current) => ({
           ...current,
           interimTranscript
@@ -503,7 +490,7 @@ export function useSpeechRecognition(
       }))
 
       if (shouldListenRef.current) {
-        startRecognition()
+        startRecognition(true)
       }
     }
 
@@ -545,6 +532,14 @@ export function useSpeechRecognition(
       }),
       window.electronAPI.onVoiceModeStopped(() => {
         stopRecognition()
+      }),
+      window.electronAPI.onVoiceSubmitRecording(() => {
+        if (submitProviderTranscription()) {
+          return
+        }
+
+        flushBufferedFinalTranscript()
+        stopRecognition()
       })
     ]
 
@@ -552,10 +547,9 @@ export function useSpeechRecognition(
 
     return () => {
       cleanupFunctions.forEach((cleanup) => cleanup())
-      clearFinalSegmentTimer()
       stopRecognition()
     }
-  }, [clearFinalSegmentTimer, startRecognition, stopRecognition])
+  }, [flushBufferedFinalTranscript, startRecognition, stopRecognition, submitProviderTranscription])
 
   return state
 }

@@ -107,8 +107,13 @@ export class ShortcutsHelper {
     })
 
     globalShortcut.register("CommandOrControl+I", () => {
-      console.log("Command/Ctrl + I pressed. Toggling voice mode.")
-      this.deps.toggleVoiceMode()
+      console.log("Command/Ctrl + I pressed. Starting voice recording.")
+      this.deps.startVoiceMode()
+    })
+
+    globalShortcut.register("CommandOrControl+7", () => {
+      console.log("Command/Ctrl + 7 pressed. Submitting voice recording.")
+      this.deps.submitVoiceRecording()
     })
 
     globalShortcut.register("CommandOrControl+Q", () => {

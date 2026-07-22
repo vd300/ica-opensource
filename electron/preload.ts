@@ -291,6 +291,8 @@ const electronAPI = {
     createVoidIpcListener(VOICE_IPC_CHANNELS.MODE_STARTED, callback),
   onVoiceModeStopped: (callback: () => void) =>
     createVoidIpcListener(VOICE_IPC_CHANNELS.MODE_STOPPED, callback),
+  onVoiceSubmitRecording: (callback: () => void) =>
+    createVoidIpcListener(VOICE_IPC_CHANNELS.SUBMIT_RECORDING, callback),
   onVoiceStatus: (callback: (payload: VoiceModeStatusPayload) => void) =>
     createIpcListener(VOICE_IPC_CHANNELS.STATUS, callback),
   onVoiceInterimTranscript: (callback: (text: string) => void) =>

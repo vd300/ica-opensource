@@ -83,7 +83,8 @@ export interface IShortcutsHelperDeps {
   setView: (view: "queue" | "solutions" | "debug") => void
   isVisible: () => boolean
   toggleMainWindow: () => void
-  toggleVoiceMode: () => void
+  startVoiceMode: () => void
+  submitVoiceRecording: () => void
   moveWindowLeft: () => void
   moveWindowRight: () => void
   moveWindowUp: () => void
@@ -167,7 +168,8 @@ function initializeHelpers() {
     setView,
     isVisible: () => state.isWindowVisible,
     toggleMainWindow,
-    toggleVoiceMode,
+    startVoiceMode,
+    submitVoiceRecording,
     moveWindowLeft: () =>
       moveWindowHorizontal((x) =>
         Math.max(-(state.windowSize?.width || 0) / 2, x - state.step)
@@ -710,6 +712,14 @@ function toggleVoiceMode(): void {
   state.voiceAssistantController?.toggle()
 }
 
+function startVoiceMode(): void {
+  state.voiceAssistantController?.start()
+}
+
+function submitVoiceRecording(): void {
+  state.voiceAssistantController?.submitRecording()
+}
+
 function stopVoiceMode(): void {
   state.voiceAssistantController?.stop()
 }
@@ -791,7 +801,9 @@ export {
   getScreenshotQueue,
   getExtraScreenshotQueue,
   clearQueues,
+  startVoiceMode,
   toggleVoiceMode,
+  submitVoiceRecording,
   stopVoiceMode,
   takeScreenshot,
   captureScreenContext,
