@@ -44,7 +44,7 @@ For voice-led interviews, the user may hear prompts like "solve this", "explain 
 2. Main process toggles voice mode and sends `voice:mode-started` to the renderer.
 3. Renderer opens a compact voice overlay and requests microphone access.
 4. Speech recognition begins and streams interim transcript text.
-5. A final or stable transcript segment is sent to the main process.
+5. Final transcript fragments are buffered briefly so pause-heavy speech is merged before being sent to the main process.
 6. Main process detects intent, for example "solve this".
 7. Main process takes a fresh screenshot using the existing screenshot helper path.
 8. Voice answer generation starts with a compact prompt containing:
@@ -60,6 +60,7 @@ For voice-led interviews, the user may hear prompts like "solve this", "explain 
 - The overlay must be compact and readable at the app's current opacity and size.
 - The first visible state should make it clear whether the app is listening, thinking, answering, or blocked by a permission/API error.
 - Interim transcript text should be visible but visually secondary.
+- Final transcript handling should tolerate natural pauses and filler words without truncating the question before the user finishes.
 - Streaming answer text should not cause layout jumps that resize the Electron window aggressively.
 - The stop action should be available in the overlay and through the same shortcut.
 - The overlay should not hide existing solution content; it can sit above the current page with a constrained max height.

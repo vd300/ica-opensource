@@ -137,6 +137,7 @@ Behavior:
 - Use continuous recognition and interim results when supported.
 - Send final segments to main for intent detection.
 - Send interim text to overlay state directly for immediate visual feedback.
+- Buffer final transcript fragments for a short stability window before sending them to main, so natural pauses do not truncate questions such as "how do you scale a service ... to handle ... 1 million requests".
 - Surface permission and availability errors through `voice:recognition-error`.
 
 If Web Speech API is unavailable, show a clear overlay error and leave the feature in a stopped state. A provider transcription fallback can be implemented in a later phase.
@@ -154,7 +155,7 @@ const INTENT_PATTERNS = [
 ```
 
 Trigger rules:
-- Only trigger on final transcript segments or interim segments that remain unchanged for a short stability window.
+- Only trigger on final transcript segments after the renderer's stability window has merged pause-fragmented speech.
 - Ignore low-confidence segments when confidence is available.
 - Debounce for 4-6 seconds after a trigger.
 - Do not start a second request while one is already active unless the user explicitly cancels.

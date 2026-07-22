@@ -63,6 +63,8 @@ const getSpeechRecognitionConstructor = (): SpeechRecognitionConstructor | null 
   )
 }
 
+const FINAL_TRANSCRIPT_STABILITY_MS = 1600
+
 const getSupportedAudioMimeType = (): string => {
   const options = [
     "audio/webm;codecs=opus",
@@ -136,6 +138,9 @@ export function useSpeechRecognition(
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const providerSegmentTimerRef = useRef<number | null>(null)
+  const finalSegmentTimerRef = useRef<number | null>(null)
+  const finalSegmentBufferRef = useRef("")
+  const finalSegmentConfidenceRef = useRef<number | undefined>(undefined)
   const shouldListenRef = useRef(false)
   const isListeningRef = useRef(false)
   const [state, setState] = useState<UseSpeechRecognitionState>({
@@ -161,6 +166,60 @@ export function useSpeechRecognition(
       })
     },
     []
+  )
+
+  const clearFinalSegmentTimer = useCallback(() => {
+    if (finalSegmentTimerRef.current !== null) {
+      window.clearTimeout(finalSegmentTimerRef.current)
+      finalSegmentTimerRef.current = null
+    }
+  }, [])
+
+  const flushBufferedFinalTranscript = useCallback(() => {
+    clearFinalSegmentTimer()
+
+    const text = finalSegmentBufferRef.current.trim()
+    if (!text) {
+      return
+    }
+
+    const confidence = finalSegmentConfidenceRef.current
+    finalSegmentBufferRef.current = ""
+    finalSegmentConfidenceRef.current = undefined
+
+    setState((current) => ({
+      ...current,
+      finalTranscript: text,
+      interimTranscript: ""
+    }))
+
+    window.electronAPI.sendVoiceTranscriptSegment({
+      text,
+      isFinal: true,
+      confidence,
+      receivedAt: Date.now()
+    })
+  }, [clearFinalSegmentTimer])
+
+  const bufferFinalTranscript = useCallback(
+    (text: string, confidence?: number) => {
+      finalSegmentBufferRef.current = `${finalSegmentBufferRef.current} ${text}`
+        .replace(/\s+/g, " ")
+        .trim()
+      finalSegmentConfidenceRef.current = confidence
+
+      setState((current) => ({
+        ...current,
+        finalTranscript: finalSegmentBufferRef.current,
+        interimTranscript: ""
+      }))
+
+      clearFinalSegmentTimer()
+      finalSegmentTimerRef.current = window.setTimeout(() => {
+        flushBufferedFinalTranscript()
+      }, FINAL_TRANSCRIPT_STABILITY_MS)
+    },
+    [clearFinalSegmentTimer, flushBufferedFinalTranscript]
   )
 
   const cleanupRecognition = useCallback(() => {
@@ -333,8 +392,13 @@ export function useSpeechRecognition(
     }
   }, [cleanupProviderTranscription, language, reportError])
 
-  const stopRecognition = useCallback(() => {
+  const stopRecognition = useCallback((resetBufferedTranscript = true) => {
     shouldListenRef.current = false
+    if (resetBufferedTranscript) {
+      clearFinalSegmentTimer()
+      finalSegmentBufferRef.current = ""
+      finalSegmentConfidenceRef.current = undefined
+    }
     const recognition = recognitionRef.current
 
     if (recognition) {
@@ -353,7 +417,7 @@ export function useSpeechRecognition(
       isListening: false,
       interimTranscript: ""
     }))
-  }, [cleanupProviderTranscription, cleanupRecognition])
+  }, [cleanupProviderTranscription, cleanupRecognition, clearFinalSegmentTimer])
 
   const startRecognition = useCallback(() => {
     const startRecognitionAsync = async () => {
@@ -365,7 +429,7 @@ export function useSpeechRecognition(
       return
     }
 
-    stopRecognition()
+    stopRecognition(false)
     shouldListenRef.current = true
     const config = await window.electronAPI.getConfig().catch(() => null)
     const recognitionLanguage = config?.voiceRecognitionLanguage || language
@@ -391,18 +455,7 @@ export function useSpeechRecognition(
         }
 
         if (result.isFinal) {
-          setState((current) => ({
-            ...current,
-            finalTranscript: transcript,
-            interimTranscript: ""
-          }))
-
-          window.electronAPI.sendVoiceTranscriptSegment({
-            text: transcript,
-            isFinal: true,
-            confidence: bestAlternative.confidence,
-            receivedAt: Date.now()
-          })
+          bufferFinalTranscript(transcript, bestAlternative.confidence)
         } else {
           interimTranscript = `${interimTranscript} ${transcript}`.trim()
         }
@@ -478,7 +531,7 @@ export function useSpeechRecognition(
     }
 
     void startRecognitionAsync()
-  }, [cleanupRecognition, language, reportError, startProviderTranscription, stopRecognition])
+  }, [bufferFinalTranscript, cleanupRecognition, language, reportError, startProviderTranscription, stopRecognition])
 
   useEffect(() => {
     setState((current) => ({
@@ -499,9 +552,10 @@ export function useSpeechRecognition(
 
     return () => {
       cleanupFunctions.forEach((cleanup) => cleanup())
+      clearFinalSegmentTimer()
       stopRecognition()
     }
-  }, [startRecognition, stopRecognition])
+  }, [clearFinalSegmentTimer, startRecognition, stopRecognition])
 
   return state
 }

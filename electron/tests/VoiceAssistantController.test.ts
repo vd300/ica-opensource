@@ -72,6 +72,10 @@ test("normalizeVoiceTranscript corrects common software engineering speech terms
     normalizeVoiceTranscript("have you... ever.. offloaded data to... to another server"),
     "have you ever offloaded data to another server"
   )
+  assert.equal(
+    normalizeVoiceTranscript("how do you scale a service to handel lets sayy 1 million request"),
+    "how do you scale a service to handle lets say 1 million request"
+  )
 })
 
 test("controller ignores punctuation-only final transcripts", async () => {

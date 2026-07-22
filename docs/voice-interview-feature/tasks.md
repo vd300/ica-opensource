@@ -41,7 +41,7 @@
 - [x] Start recognition on `voice:mode-started`.
 - [x] Stop recognition on `voice:mode-stopped`.
 - [x] Enable continuous recognition and interim results where supported.
-- [x] Send final transcript segments to the main process.
+- [x] Buffer pause-fragmented final transcript segments before sending them to the main process.
 - [x] Show interim transcript locally for immediate user feedback.
 - [x] Report unavailable speech recognition and microphone permission errors.
 

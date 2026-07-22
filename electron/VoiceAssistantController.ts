@@ -118,7 +118,9 @@ const TECHNICAL_TRANSCRIPT_CORRECTIONS: Array<[RegExp, string]> = [
   [/\btype script\b/gi, "TypeScript"],
   [/\bjava script\b/gi, "JavaScript"],
   [/\bpost gres\b/gi, "Postgres"],
-  [/\bkuber net ease\b/gi, "Kubernetes"]
+  [/\bkuber net ease\b/gi, "Kubernetes"],
+  [/\bhandel\b/gi, "handle"],
+  [/\bsayy+\b/gi, "say"]
 ]
 
 const hasWords = (text: string): boolean => /[a-z0-9]/i.test(text)
