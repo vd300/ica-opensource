@@ -158,6 +158,22 @@ Trigger rules:
 - Ignore low-confidence segments when confidence is available.
 - Debounce for 4-6 seconds after a trigger.
 - Do not start a second request while one is already active unless the user explicitly cancels.
+- Normalize common software-engineering terms before matching, for example `JIL`, `GIM`, and `gill` should become `GIL` for Python questions, and pause artifacts such as `to... to` should collapse to one word.
+- Trigger explicit questions and assistance requests without requiring an exhaustive software-engineering vocabulary match. Screen-referential commands such as "solve this" can still trigger because the screen image supplies the coding context.
+- Let the model perform the semantic software-engineering scope check and briefly decline clearly unrelated questions instead of silently ignoring them in the controller.
+- Treat behavioral or experience-style prompts as in scope when they include engineering work, for example data migration, offloading/uploading data, production systems, servers, services, reliability, or scaling.
+- Leave clearly unrelated questions transcript-only and do not send them to the model.
+
+### Interview Domain Tuning
+The main-process transcript normalization should run before the transcript is stored, emitted as final text, matched for intent, debounced, or sent to `ProcessingHelper`.
+
+The initial vocabulary should focus on interview-heavy software engineering terms:
+- languages and frameworks: `GIL`, `Global Interpreter Lock`, `asyncio`, `Django`, `Flask`, `FastAPI`, `JavaScript`, `TypeScript`, `React`, `Node.js`
+- APIs and data: `REST API`, `SQL`, `Postgres`, `Redis`
+- distributed systems and platforms: `Kafka`, message queues, event streaming, `Docker`, `Kubernetes`
+- interview concepts: data structures, algorithms, complexity, debugging, system design, scalability, services, data migration, production systems
+
+Keep correction hints deterministic and easy to extend. Do not use this list as a hard allowlist for all possible software-engineering topics.
 
 ## Screen Context Capture
 Use the existing `takeScreenshot()` dependency from `main.ts`. For voice mode, prefer a temporary screenshot path that is not pushed into the normal screenshot queue.
@@ -191,6 +207,8 @@ Prompt strategy:
 - Ask for answer-first formatting.
 - Ask for concise output unless the intent requires detail.
 - Use the configured language from `getLanguage()`.
+- Tell the model to answer software-engineering interview topics broadly, answer ambiguous prompts when they could plausibly be technical interview questions, and briefly decline clearly unrelated questions.
+- Tell the model to interpret near-match speech recognition terms as technical vocabulary when the surrounding context supports it, such as `JIL` or `GIM` in Python meaning `GIL`.
 
 Prompt sketch:
 
@@ -199,6 +217,10 @@ You are helping with an interview practice prompt. Use the screen image and the 
 Intent: solve
 Preferred language: python
 Transcript: "solve this"
+
+Scope: answer software-engineering interview topics across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, and system design.
+
+Behavioral engineering prompts such as "have you ever uploaded data to another server" are in scope.
 
 Respond immediately with the most useful answer first. For coding problems:
 1. Give the approach in 1-2 lines.

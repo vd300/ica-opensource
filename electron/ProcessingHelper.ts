@@ -1119,7 +1119,7 @@ Your solution should be efficient, well-commented, and handle edge cases.
             {
               role: "system",
               content:
-                "You are a concise coding interview assistant. Answer immediately with the most useful information first."
+                "You are a concise software-engineering interview assistant. Answer software engineering interview questions across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, system design, and behavioral experience questions about engineering work. When a transcript is ambiguous, answer it if it could plausibly be a technical interview question. Briefly decline only clearly non-engineering topics."
             },
             {
               role: "user",
@@ -1207,7 +1207,9 @@ Your solution should be efficient, well-commented, and handle edge cases.
     const transcription = await this.openaiClient.audio.transcriptions.create({
       file,
       model: "whisper-1",
-      language
+      language,
+      prompt:
+        "Software engineering interview vocabulary: Kafka, message queues, event streaming, distributed systems, rate limiting, throttling, quotas, retries, exponential backoff, circuit breakers, Python, GIL, Global Interpreter Lock, Java, JavaScript, TypeScript, React, Node.js, backend, frontend, infrastructure, REST API, SQL, Postgres, Redis, Docker, Kubernetes, system design, algorithms, data structures, time complexity, space complexity, data migration, offloading data, uploading data, servers, production systems."
     });
 
     return transcription.text?.trim() || "";
@@ -1239,12 +1241,20 @@ Your solution should be efficient, well-commented, and handle edge cases.
         "Include a fuller explanation with edge cases and reasoning after the direct answer."
     };
 
-    return `You are helping with an interview practice prompt. Use the screen image and transcript.
+    return `You are helping with a software-engineering interview practice prompt. Use the screen image and transcript.
 
 Intent: ${intent}
 Preferred language: ${language}
 Response style: ${responseStyle}
 Transcript: "${transcript}"
+
+Scope:
+- Answer software engineering interview questions across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, architecture, and system design.
+- Treat behavioral or experience questions as in scope when they involve engineering work, for example uploading, offloading, migrating, syncing, or serving data across servers or services.
+- Treat near-match speech recognition terms as technical vocabulary when context supports it, for example "JIL" or "GIM" in Python means "GIL".
+- When the transcript is ambiguous, answer it if it could plausibly be a technical interview question.
+- Only use the off-topic reply for clearly non-engineering topics.
+- Keep the answer interview-ready: prioritize what the candidate should say, then the implementation or reasoning.
 
 ${intentInstructions[intent]}
 ${styleInstructions[responseStyle]}

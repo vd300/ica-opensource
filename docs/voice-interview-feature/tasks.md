@@ -16,6 +16,8 @@
 - [x] Add session state: enabled, status, last transcript, active intent, request id, active abort controller, and debounce timestamp.
 - [x] Implement `toggle()`, `start()`, `stop()`, `handleTranscriptSegment()`, and `handleRecognitionError()`.
 - [x] Add deterministic intent detection for solve, explain, complexity, and debug phrases.
+- [x] Normalize common technical speech-recognition misses and pause artifacts before intent detection and answer generation.
+- [x] Route explicit freeform questions to the answer layer instead of relying on an exhaustive software-engineering vocabulary allowlist.
 - [x] Add debounce logic to avoid repeated triggers from the same spoken phrase.
 - [x] Add cancellation handling that aborts generation and sends stopped/error events.
 
@@ -56,6 +58,8 @@
 - [x] Implement OpenAI streaming with chunk callbacks.
 - [x] Add non-streaming fallback for providers that are not yet wired for streaming.
 - [x] Add concise voice-specific prompts for solve, explain, complexity, and debug intents.
+- [x] Tune voice prompts for broad software-engineering interview scope and concise off-topic handling.
+- [x] Add provider transcription vocabulary hints for software-engineering interview terms.
 - [x] Send `voice:answer-start`, `voice:answer-chunk`, `voice:answer-complete`, and `voice:error` events.
 - [x] Support abort through the request `AbortSignal`.
 
@@ -77,6 +81,8 @@
 
 ## Phase 10 - Tests and QA
 - [x] Unit test intent matching.
+- [x] Unit test transcript normalization for technical terms such as `GIL` and pause artifacts.
+- [x] Unit test that unrelated freeform questions do not trigger answers.
 - [x] Unit test debounce behavior.
 - [x] Unit test controller cancellation.
 - [x] Type-check preload and `window.electronAPI` additions.

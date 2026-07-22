@@ -70,7 +70,8 @@ const INTENT_PATTERNS: IntentPattern[] = [
       /\b(answer|handle|work through|walk through|help (me )?with|take a look at) (this|it|the problem|the question|the prompt)\b/i,
       /\bhow (would|do) (you|we) (solve|approach|handle) (this|it|the problem|the question|the prompt)\b/i,
       /\bwhat (should|would) (i|we|you) do (here|next|for this)\b/i,
-      /\bcan you (help|answer|do) (this|it)\b/i
+      /\bcan you (help|answer|do) (this|it)\b/i,
+      /\b(can you )?give me the solution\b/i
     ]
   },
   {
@@ -106,11 +107,39 @@ const DEFAULT_DEBOUNCE_MS = 5000
 const DEFAULT_MIN_CONFIDENCE = 0.3
 const MIN_FREEFORM_PROMPT_WORDS = 3
 
+const TECHNICAL_TRANSCRIPT_CORRECTIONS: Array<[RegExp, string]> = [
+  [/\b(?:jil|gim|gel|gill|g i l|gee eye ell)\b/gi, "GIL"],
+  [/\bglobal interpreter lock\b/gi, "Global Interpreter Lock"],
+  [/\bcough ka\b/gi, "Kafka"],
+  [/\bsequel\b/gi, "SQL"],
+  [/\brest api\b/gi, "REST API"],
+  [/\bfast api\b/gi, "FastAPI"],
+  [/\bnode js\b/gi, "Node.js"],
+  [/\btype script\b/gi, "TypeScript"],
+  [/\bjava script\b/gi, "JavaScript"],
+  [/\bpost gres\b/gi, "Postgres"],
+  [/\bkuber net ease\b/gi, "Kubernetes"]
+]
+
 const hasWords = (text: string): boolean => /[a-z0-9]/i.test(text)
 
 const isLikelyMicCheck = (text: string): boolean =>
   /\b(mic|microphone) check\b/i.test(text) ||
   /\b(test(ing)?|hello)\b/i.test(text) && !/[?]/.test(text)
+
+export function normalizeVoiceTranscript(text: string): string {
+  const correctedText = TECHNICAL_TRANSCRIPT_CORRECTIONS.reduce(
+    (normalized, [pattern, replacement]) =>
+      normalized.replace(pattern, replacement),
+    text
+  )
+
+  return correctedText
+    .replace(/[.]{2,}/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b([a-z]+)\s+\1\b/gi, "$1")
+    .trim()
+}
 
 const isActionableFreeformPrompt = (text: string): boolean => {
   const normalizedText = text.trim()
@@ -123,16 +152,17 @@ const isActionableFreeformPrompt = (text: string): boolean => {
     return false
   }
 
-  return (
+  const asksForHelp =
     /[?]/.test(normalizedText) ||
-    /\b(can|could|please|tell|give|show|find|write|implement|explain|solve|debug|fix|help|analyze)\b/i.test(normalizedText) ||
+    /\b(can|could|please|tell|give|show|find|write|implement|explain|solve|debug|fix|help|analyze|compare|design)\b/i.test(normalizedText) ||
     /\b(how|what|why|which|where|when)\b/i.test(normalizedText) ||
-    /\b(array|string|tree|graph|linked list|binary search|dynamic programming|algorithm|complexity|code|problem|solution)\b/i.test(normalizedText)
-  )
+    /\bhave you\b/i.test(normalizedText)
+
+  return asksForHelp
 }
 
 export function detectVoiceIntent(text: string): VoiceIntent | null {
-  const normalizedText = text.trim()
+  const normalizedText = normalizeVoiceTranscript(text)
   if (!normalizedText) {
     return null
   }
@@ -143,6 +173,10 @@ export function detectVoiceIntent(text: string): VoiceIntent | null {
 
   if (match?.intent) {
     return match.intent
+  }
+
+  if (/\bexplain\b/i.test(normalizedText)) {
+    return "explain"
   }
 
   return isActionableFreeformPrompt(normalizedText) ? "solve" : null
@@ -247,7 +281,7 @@ export class VoiceAssistantController {
       return { success: false, error: "Voice mode is not enabled" }
     }
 
-    const text = segment.text.trim()
+    const text = normalizeVoiceTranscript(segment.text)
     if (!text || !hasWords(text)) {
       return { success: true }
     }
@@ -259,7 +293,10 @@ export class VoiceAssistantController {
       return { success: true }
     }
 
-    this.send(VOICE_IPC_CHANNELS.FINAL_TRANSCRIPT, segment)
+    this.send(VOICE_IPC_CHANNELS.FINAL_TRANSCRIPT, {
+      ...segment,
+      text
+    } satisfies VoiceTranscriptSegment)
 
     if (
       typeof segment.confidence === "number" &&
@@ -402,7 +439,9 @@ export class VoiceAssistantController {
 
     this.state = {
       ...this.state,
-      status: "complete",
+      status: this.state.enabled ? "listening" : "complete",
+      activeIntent: this.state.enabled ? null : this.state.activeIntent,
+      requestId: this.state.enabled ? null : payload.requestId,
       activeAbortController: null
     }
 

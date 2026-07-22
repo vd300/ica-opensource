@@ -3,6 +3,7 @@ import test from "node:test"
 import { setTimeout as delay } from "node:timers/promises"
 import {
   detectVoiceIntent,
+  normalizeVoiceTranscript,
   VoiceAssistantController
 } from "../VoiceAssistantController"
 import { VOICE_IPC_CHANNELS } from "../voiceIpc"
@@ -41,13 +42,36 @@ test("detectVoiceIntent matches specific and general assistance prompts", () => 
   assert.equal(detectVoiceIntent("how would you approach this prompt"), "solve")
   assert.equal(detectVoiceIntent("please work through the problem"), "solve")
   assert.equal(detectVoiceIntent("walk me through the approach"), "explain")
+  assert.equal(detectVoiceIntent("explain rate limiting"), "explain")
   assert.equal(detectVoiceIntent("what is the time complexity"), "complexity")
   assert.equal(detectVoiceIntent("why is this failing"), "debug")
   assert.equal(detectVoiceIntent("what should I do here"), "solve")
   assert.equal(detectVoiceIntent("can you give me the solution"), "solve")
+  assert.equal(detectVoiceIntent("what is JIL in python"), "solve")
+  assert.equal(detectVoiceIntent("how does Kafka work"), "solve")
+  assert.equal(
+    detectVoiceIntent("have you... ever.. offloaded data to... to another server"),
+    "solve"
+  )
+  assert.equal(
+    detectVoiceIntent("have you ever uploaded data to another server"),
+    "solve"
+  )
+  assert.equal(detectVoiceIntent("what is the capital of France?"), "solve")
+  assert.equal(detectVoiceIntent("explain pizza toppings"), "explain")
   assert.equal(detectVoiceIntent(". ."), null)
   assert.equal(detectVoiceIntent("hello hello mic check 1 2 3"), null)
   assert.equal(detectVoiceIntent("nice weather today"), null)
+})
+
+test("normalizeVoiceTranscript corrects common software engineering speech terms", () => {
+  assert.equal(normalizeVoiceTranscript("what is JIL in python"), "what is GIL in python")
+  assert.equal(normalizeVoiceTranscript("explain GIM in python"), "explain GIL in python")
+  assert.equal(normalizeVoiceTranscript("design a rest api in fast api"), "design a REST API in FastAPI")
+  assert.equal(
+    normalizeVoiceTranscript("have you... ever.. offloaded data to... to another server"),
+    "have you ever offloaded data to another server"
+  )
 })
 
 test("controller ignores punctuation-only final transcripts", async () => {
@@ -114,6 +138,62 @@ test("controller debounces duplicate final transcripts", async () => {
 
   now += 5_001
   controller.handleTranscriptSegment(createFinalSegment("answer this question"))
+  await flushAsyncWork()
+
+  assert.equal(captures, 2)
+})
+
+test("controller returns to listening after a completed answer", async () => {
+  const events: SentEvent[] = []
+
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+    hasApiKey: () => true,
+    captureScreenContext: async () => ({ screenshotBase64: "screen" }),
+    streamVoiceAnswer: async ({ onComplete }) => {
+      onComplete("done")
+    }
+  })
+
+  controller.start()
+  controller.handleTranscriptSegment(createFinalSegment("what is JIL in python"))
+  await flushAsyncWork()
+
+  assert.equal(controller.getState().enabled, true)
+  assert.equal(controller.getState().status, "listening")
+  assert.equal(controller.getState().activeIntent, null)
+  assert.equal(controller.getState().requestId, null)
+  assert.ok(
+    events.some(
+      (event) =>
+        event.channel === VOICE_IPC_CHANNELS.STATUS &&
+        (event.payload as { status?: string }).status === "listening"
+    )
+  )
+})
+
+test("controller accepts a different software engineering question after completion", async () => {
+  const events: SentEvent[] = []
+  let captures = 0
+
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+    hasApiKey: () => true,
+    captureScreenContext: async () => {
+      captures += 1
+      return { screenshotBase64: "screen" }
+    },
+    streamVoiceAnswer: async ({ onComplete }) => {
+      onComplete("done")
+    }
+  })
+
+  controller.start()
+  controller.handleTranscriptSegment(createFinalSegment("what is GIL in python"))
+  await flushAsyncWork()
+  controller.handleTranscriptSegment(createFinalSegment("what is time complexity in python"))
   await flushAsyncWork()
 
   assert.equal(captures, 2)

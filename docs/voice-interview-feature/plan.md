@@ -17,7 +17,10 @@ For voice-led interviews, the user may hear prompts like "solve this", "explain 
 - Register `Left Ctrl + I` as the voice mode toggle on Windows/Linux, with the closest reliable Electron accelerator fallback when physical left/right modifier detection is unavailable.
 - Start and stop a voice assistant session from a global shortcut.
 - Capture interviewer speech with interim and final transcript updates.
+- Normalize common software-engineering speech-recognition errors before intent detection, including language, backend, distributed-systems, and data-system vocabulary such as `GIL`, `Kafka`, and `REST API`.
 - Detect trigger phrases such as "solve this" and infer related intents like explanation, debugging, or complexity discussion.
+- Restrict freeform voice answers to software engineering interview topics without narrowing the feature to one language or backend-only development. Behavioral experience questions are in scope when they are about engineering work.
+- Do not maintain an exhaustive software-engineering vocabulary allowlist for triggering. Explicit questions and assistance requests should reach the answer layer, where the model performs the semantic scope check and briefly declines clearly non-engineering topics.
 - Capture fresh screen context automatically when a trigger fires.
 - Generate an answer from the transcript plus screen image.
 - Stream answer chunks to the renderer so the first useful text appears quickly.
@@ -68,7 +71,23 @@ The first release should support these intents:
 - `complexity`: "what is the time complexity", "space complexity"
 - `debug`: "what is wrong", "fix this", "why is it failing"
 
-Unknown speech should remain transcript-only and should not trigger an AI request.
+Unknown non-question speech should remain transcript-only and should not trigger an AI request. Explicit questions and assistance requests should trigger even when they use an unseen technical term. For example, "what is GIL in Python" should trigger even if speech recognition returns "JIL" or "GIM", "how does Kafka work" and "explain rate limiting" should trigger as distributed-systems/API reliability questions, and "have you ever uploaded data to another server" should trigger as a behavioral engineering interview question. Clearly unrelated questions may still trigger the answer layer so the model can provide a short software-engineering-scope decline instead of silently ignoring the user.
+
+## Software Engineering Tuning
+Apply deterministic transcript normalization in the main process before confidence checks, intent detection, debounce comparison, and answer generation.
+
+Initial correction examples:
+- `JIL`, `GIM`, `gill`, or spoken letter forms near Python context -> `GIL`
+- pause punctuation and immediate repeated words such as `to... to` -> `to`
+- `sequel` -> `SQL`
+- `rest api` -> `REST API`
+- `fast api` -> `FastAPI`
+- `node js` -> `Node.js`
+- `type script` -> `TypeScript`
+
+The model prompt should reinforce the same scope: answer software engineering interview topics across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, and system design, answer ambiguous prompts when they could plausibly be technical interview questions, and briefly decline clearly unrelated requests.
+
+Behavioral or experience-style prompts should not be declined when they involve engineering work such as data migration, offloading/uploading data, deployment, production systems, servers, services, reliability, or scaling.
 
 ## Latency Strategy
 The feature should optimize for time-to-first-token:
@@ -110,6 +129,8 @@ Add settings only when the MVP path is stable:
 - Pressing `Left Ctrl + I` toggles voice mode without breaking existing shortcuts.
 - The overlay shows listening state and transcript updates.
 - A phrase like "solve this" triggers one request, not repeated duplicate requests.
+- A phrase like "what is JIL in Python" is normalized and answered as "what is GIL in Python".
+- A clearly unrelated freeform question does not trigger an answer request.
 - The feature captures a fresh screen image automatically.
 - The first answer chunk appears before the full answer is complete for providers that support streaming.
 - Stop/cancel ends microphone listening and aborts in-flight model requests.
