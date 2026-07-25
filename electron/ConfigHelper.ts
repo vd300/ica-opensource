@@ -14,6 +14,7 @@ interface Config {
   language: string;
   voiceAssistantEnabled: boolean;
   voiceRecognitionLanguage: string;
+  voiceTranscriptionModel: "gpt-4o-transcribe" | "gpt-4o-mini-transcribe";
   voiceTriggerConfidenceThreshold: number;
   voiceResponseStyle: "concise" | "code-first" | "detailed";
   opacity: number;
@@ -30,6 +31,7 @@ export class ConfigHelper extends EventEmitter {
     language: "python",
     voiceAssistantEnabled: true,
     voiceRecognitionLanguage: "en-US",
+    voiceTranscriptionModel: "gpt-4o-transcribe",
     voiceTriggerConfidenceThreshold: 0.3,
     voiceResponseStyle: "concise",
     opacity: 1.0
@@ -101,6 +103,22 @@ export class ConfigHelper extends EventEmitter {
     return model;
   }
 
+  private sanitizeVoiceTranscriptionModel(model: string): Config["voiceTranscriptionModel"] {
+    const allowedModels: Config["voiceTranscriptionModel"][] = [
+      "gpt-4o-transcribe",
+      "gpt-4o-mini-transcribe"
+    ];
+
+    if (!allowedModels.includes(model as Config["voiceTranscriptionModel"])) {
+      console.warn(
+        `Invalid voice transcription model specified: ${model}. Using default model: gpt-4o-transcribe`
+      );
+      return "gpt-4o-transcribe";
+    }
+
+    return model as Config["voiceTranscriptionModel"];
+  }
+
   public loadConfig(): Config {
     try {
       if (fs.existsSync(this.configPath)) {
@@ -138,6 +156,9 @@ export class ConfigHelper extends EventEmitter {
         if (!mergedConfig.voiceRecognitionLanguage) {
           mergedConfig.voiceRecognitionLanguage = "en-US";
         }
+        mergedConfig.voiceTranscriptionModel = this.sanitizeVoiceTranscriptionModel(
+          mergedConfig.voiceTranscriptionModel
+        );
 
         return mergedConfig;
       }
@@ -221,6 +242,11 @@ export class ConfigHelper extends EventEmitter {
       if (updates.debuggingModel) {
         updates.debuggingModel = this.sanitizeModelSelection(updates.debuggingModel, provider);
       }
+      if (updates.voiceTranscriptionModel) {
+        updates.voiceTranscriptionModel = this.sanitizeVoiceTranscriptionModel(
+          updates.voiceTranscriptionModel
+        );
+      }
       
       const newConfig = { ...currentConfig, ...updates };
       this.saveConfig(newConfig);
@@ -232,6 +258,7 @@ export class ConfigHelper extends EventEmitter {
           updates.debuggingModel !== undefined || updates.language !== undefined ||
           updates.voiceAssistantEnabled !== undefined ||
           updates.voiceRecognitionLanguage !== undefined ||
+          updates.voiceTranscriptionModel !== undefined ||
           updates.voiceTriggerConfidenceThreshold !== undefined ||
           updates.voiceResponseStyle !== undefined) {
         this.emit('config-updated', newConfig);

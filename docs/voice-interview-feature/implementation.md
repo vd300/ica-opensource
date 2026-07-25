@@ -86,6 +86,7 @@ Use namespaced events to avoid collisions.
 
 Renderer invokes:
 - `voice:transcript-segment`
+- `voice:audio-chunk`
 - `voice:stop`
 - `voice:renderer-ready`
 - `voice:recognition-error`
@@ -141,10 +142,19 @@ Behavior:
 - Buffer final segments locally during recording.
 - Send interim text to overlay state directly for immediate visual feedback.
 - When `voice:submit-recording` arrives, submit the accumulated final transcript plus the latest interim transcript to main, then stop microphone capture.
-- In provider transcription fallback mode, record audio continuously until `voice:submit-recording`; do not auto-stop or transcribe on fixed time slices.
+- In provider transcription fallback mode, record audio continuously until `voice:submit-recording`; do not auto-stop or transcribe on fixed time slices. The fallback sends `voice:audio-chunk` to the main process for OpenAI transcription.
 - Surface permission and availability errors through `voice:recognition-error`.
 
-If Web Speech API is unavailable, show a clear overlay error and leave the feature in a stopped state. A provider transcription fallback can be implemented in a later phase.
+If Web Speech API is unavailable and OpenAI is selected as the provider, use provider transcription fallback through `/audio/transcriptions`. If another provider is selected, show a clear overlay error and leave the feature in a stopped state.
+
+### Provider Transcription Model
+OpenAI provider transcription uses the `voiceTranscriptionModel` setting from `ConfigHelper`.
+
+Supported values:
+- `gpt-4o-transcribe`: default, best transcription quality.
+- `gpt-4o-mini-transcribe`: faster and more cost-effective.
+
+The setting is exposed in the Settings dialog under Voice Assistant > Transcription Model. Config loading sanitizes unknown values back to `gpt-4o-transcribe`, so older configs and hand-edited configs remain safe.
 
 ## Intent Detection
 Keep the first version deterministic and fast. Add a small phrase matcher in the controller:

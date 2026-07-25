@@ -76,6 +76,7 @@
 ## Phase 9 - Settings and Polish
 - [x] Add a settings toggle for enabling voice assistant mode.
 - [x] Add recognition language setting.
+- [x] Add OpenAI provider transcription model setting for `gpt-4o-transcribe` and `gpt-4o-mini-transcribe`.
 - [x] Add configurable trigger confidence threshold if Web Speech confidence is reliable enough.
 - [x] Add response style option: concise, code-first, or detailed.
 - [x] Add toasts or inline errors for missing API key and unavailable microphone.

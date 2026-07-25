@@ -13,6 +13,9 @@ import type {
 
 export type APIProvider = "openai" | "gemini" | "anthropic"
 export type VoiceResponseStyle = "concise" | "code-first" | "detailed"
+export type VoiceTranscriptionModel =
+  | "gpt-4o-transcribe"
+  | "gpt-4o-mini-transcribe"
 
 export interface AppConfig {
   apiKey: string
@@ -23,6 +26,7 @@ export interface AppConfig {
   language: string
   voiceAssistantEnabled: boolean
   voiceRecognitionLanguage: string
+  voiceTranscriptionModel: VoiceTranscriptionModel
   voiceTriggerConfidenceThreshold: number
   voiceResponseStyle: VoiceResponseStyle
   opacity: number

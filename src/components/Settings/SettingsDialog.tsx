@@ -15,6 +15,7 @@ import { useToast } from "../../contexts/toast";
 
 type APIProvider = "openai" | "gemini" | "anthropic";
 type VoiceResponseStyle = "concise" | "code-first" | "detailed";
+type VoiceTranscriptionModel = "gpt-4o-transcribe" | "gpt-4o-mini-transcribe";
 
 type AIModel = {
   id: string;
@@ -30,6 +31,19 @@ type ModelCategory = {
   geminiModels: AIModel[];
   anthropicModels: AIModel[];
 };
+
+const voiceTranscriptionModels: AIModel[] = [
+  {
+    id: "gpt-4o-transcribe",
+    name: "GPT-4o Transcribe",
+    description: "Best accuracy for OpenAI provider transcription"
+  },
+  {
+    id: "gpt-4o-mini-transcribe",
+    name: "GPT-4o mini Transcribe",
+    description: "Faster, more cost-effective OpenAI transcription"
+  }
+];
 
 // Define available models for each category
 const modelCategories: ModelCategory[] = [
@@ -203,6 +217,8 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
   const [language, setLanguage] = useState("python");
   const [voiceAssistantEnabled, setVoiceAssistantEnabled] = useState(true);
   const [voiceRecognitionLanguage, setVoiceRecognitionLanguage] = useState("en-US");
+  const [voiceTranscriptionModel, setVoiceTranscriptionModel] =
+    useState<VoiceTranscriptionModel>("gpt-4o-transcribe");
   const [voiceTriggerConfidenceThreshold, setVoiceTriggerConfidenceThreshold] = useState(0.3);
   const [voiceResponseStyle, setVoiceResponseStyle] = useState<VoiceResponseStyle>("concise");
   const [isLoading, setIsLoading] = useState(false);
@@ -237,6 +253,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         language?: string;
         voiceAssistantEnabled?: boolean;
         voiceRecognitionLanguage?: string;
+        voiceTranscriptionModel?: VoiceTranscriptionModel;
         voiceTriggerConfidenceThreshold?: number;
         voiceResponseStyle?: VoiceResponseStyle;
       }
@@ -252,6 +269,9 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
           setLanguage(config.language || "python");
           setVoiceAssistantEnabled(config.voiceAssistantEnabled ?? true);
           setVoiceRecognitionLanguage(config.voiceRecognitionLanguage || "en-US");
+          setVoiceTranscriptionModel(
+            config.voiceTranscriptionModel || "gpt-4o-transcribe"
+          );
           setVoiceTriggerConfidenceThreshold(
             typeof config.voiceTriggerConfidenceThreshold === "number"
               ? config.voiceTriggerConfidenceThreshold
@@ -301,6 +321,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         language,
         voiceAssistantEnabled,
         voiceRecognitionLanguage,
+        voiceTranscriptionModel,
         voiceTriggerConfidenceThreshold,
         voiceResponseStyle,
       });
@@ -552,6 +573,34 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
                     <option value="hi-IN">Hindi (India)</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-white/60" htmlFor="voiceTranscriptionModel">
+                  Transcription Model
+                </label>
+                <select
+                  id="voiceTranscriptionModel"
+                  value={voiceTranscriptionModel}
+                  onChange={(e) =>
+                    setVoiceTranscriptionModel(e.target.value as VoiceTranscriptionModel)
+                  }
+                  disabled={apiProvider !== "openai"}
+                  className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white outline-none focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {voiceTranscriptionModels.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-white/50">
+                  {
+                    voiceTranscriptionModels.find(
+                      (model) => model.id === voiceTranscriptionModel
+                    )?.description
+                  }
+                </p>
               </div>
 
               <div className="space-y-1">

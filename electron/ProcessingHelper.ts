@@ -1266,7 +1266,7 @@ Your solution should be efficient, well-commented, and handle edge cases.
 
     const transcription = await this.openaiClient.audio.transcriptions.create({
       file,
-      model: "whisper-1",
+      model: config.voiceTranscriptionModel || "gpt-4o-transcribe",
       language,
       prompt:
         "Software engineering interview vocabulary: Kafka, message queues, event streaming, distributed systems, rate limiting, throttling, quotas, retries, exponential backoff, circuit breakers, Python, GIL, Global Interpreter Lock, Java, JavaScript, TypeScript, React, Node.js, backend, frontend, infrastructure, REST API, SQL, Postgres, Redis, Docker, Kubernetes, system design, algorithms, data structures, time complexity, space complexity, data migration, offloading data, uploading data, servers, production systems."
