@@ -21,6 +21,7 @@ export interface VoiceTranscriptSegment {
   text: string
   isFinal: boolean
   confidence?: number
+  submittedPrompt?: boolean
   receivedAt: number
 }
 
@@ -28,6 +29,7 @@ export interface VoiceAudioChunkPayload {
   audioBase64: string
   mimeType: string
   language?: string
+  submittedPrompt?: boolean
   recordedAt: number
 }
 

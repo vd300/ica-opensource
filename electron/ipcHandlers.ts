@@ -60,6 +60,7 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
           text,
           isFinal: true,
           confidence: 1,
+          submittedPrompt: chunk.submittedPrompt,
           receivedAt: Date.now()
         })
       } catch (error) {

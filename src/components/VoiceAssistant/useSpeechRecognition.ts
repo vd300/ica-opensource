@@ -166,7 +166,7 @@ export function useSpeechRecognition(
     []
   )
 
-  const flushBufferedFinalTranscript = useCallback(() => {
+  const flushBufferedFinalTranscript = useCallback((submittedPrompt = false) => {
     const text = `${finalSegmentBufferRef.current} ${interimTranscriptRef.current}`
       .replace(/\s+/g, " ")
       .trim()
@@ -189,6 +189,7 @@ export function useSpeechRecognition(
       text,
       isFinal: true,
       confidence,
+      submittedPrompt,
       receivedAt: Date.now()
     })
   }, [])
@@ -333,6 +334,7 @@ export function useSpeechRecognition(
               audioBase64,
               mimeType: audioBlob.type || mimeType || "audio/webm",
               language: config?.voiceRecognitionLanguage || language,
+              submittedPrompt: true,
               recordedAt: Date.now()
             })
 
@@ -538,7 +540,7 @@ export function useSpeechRecognition(
           return
         }
 
-        flushBufferedFinalTranscript()
+        flushBufferedFinalTranscript(true)
         stopRecognition()
       })
     ]

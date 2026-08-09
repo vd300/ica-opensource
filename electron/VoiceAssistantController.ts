@@ -163,6 +163,19 @@ const isActionableFreeformPrompt = (text: string): boolean => {
   return asksForHelp
 }
 
+const isLikelyTechnicalTopicFragment = (text: string): boolean => {
+  const normalizedText = text.trim()
+  const words = normalizedText.match(/[a-z0-9]+/gi) ?? []
+  if (words.length < MIN_FREEFORM_PROMPT_WORDS || isLikelyMicCheck(normalizedText)) {
+    return false
+  }
+
+  return (
+    /\bin (python|java|javascript|typescript|go|golang|c\+\+|c#|csharp|sql|react|node|node\.js)\b/i.test(normalizedText) ||
+    /\b(vs|versus)\b/i.test(normalizedText)
+  )
+}
+
 export function detectVoiceIntent(text: string): VoiceIntent | null {
   const normalizedText = normalizeVoiceTranscript(text)
   if (!normalizedText) {
@@ -178,6 +191,10 @@ export function detectVoiceIntent(text: string): VoiceIntent | null {
   }
 
   if (/\bexplain\b/i.test(normalizedText)) {
+    return "explain"
+  }
+
+  if (isLikelyTechnicalTopicFragment(normalizedText)) {
     return "explain"
   }
 
@@ -325,15 +342,18 @@ export class VoiceAssistantController {
       text
     } satisfies VoiceTranscriptSegment)
 
+    const submittedPrompt = segment.submittedPrompt === true
+
     if (
+      !submittedPrompt &&
       typeof segment.confidence === "number" &&
       segment.confidence < this.getVoiceSettings().minConfidence
     ) {
       return { success: true }
     }
 
-    const intent = detectVoiceIntent(text)
-    if (!intent || this.shouldDebounce(text)) {
+    const intent = detectVoiceIntent(text) ?? (submittedPrompt ? "solve" : null)
+    if (!intent || (!submittedPrompt && this.shouldDebounce(text))) {
       return { success: true }
     }
 

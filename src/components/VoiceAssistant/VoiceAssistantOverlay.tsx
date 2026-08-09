@@ -220,6 +220,7 @@ export function VoiceAssistantOverlay() {
       text,
       isFinal: true,
       confidence: 1,
+      submittedPrompt: true,
       receivedAt: Date.now()
     })
   }

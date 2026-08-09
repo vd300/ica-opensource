@@ -47,7 +47,8 @@ test("detectVoiceIntent matches specific and general assistance prompts", () => 
   assert.equal(detectVoiceIntent("why is this failing"), "debug")
   assert.equal(detectVoiceIntent("what should I do here"), "solve")
   assert.equal(detectVoiceIntent("can you give me the solution"), "solve")
-  assert.equal(detectVoiceIntent("what is JIL in python"), "solve")
+  assert.equal(detectVoiceIntent("what is JIL in python"), "explain")
+  assert.equal(detectVoiceIntent("class method and static method in python"), "explain")
   assert.equal(detectVoiceIntent("how does Kafka work"), "solve")
   assert.equal(
     detectVoiceIntent("have you... ever.. offloaded data to... to another server"),
@@ -210,6 +211,69 @@ test("controller requests renderer transcript submission", () => {
   assert.ok(
     events.some((event) => event.channel === VOICE_IPC_CHANNELS.SUBMIT_RECORDING)
   )
+})
+
+test("controller treats submitted transcript as a prompt without trigger words", async () => {
+  const events: SentEvent[] = []
+  let captures = 0
+
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+    hasApiKey: () => true,
+    captureScreenContext: async () => {
+      captures += 1
+      return { screenshotBase64: "screen" }
+    },
+    streamVoiceAnswer: async ({ intent, transcript, onComplete }) => {
+      assert.equal(intent, "solve")
+      assert.equal(transcript, "reverse linked list")
+      onComplete("done")
+    }
+  })
+
+  controller.start()
+  controller.handleTranscriptSegment({
+    ...createFinalSegment("reverse linked list", 0.1),
+    submittedPrompt: true
+  })
+  await flushAsyncWork()
+
+  assert.equal(captures, 1)
+  assert.equal(controller.getState().status, "complete")
+  assert.ok(
+    events.some((event) => event.channel === VOICE_IPC_CHANNELS.TRIGGER_DETECTED)
+  )
+})
+
+test("controller explains submitted technical topic fragments", async () => {
+  const events: SentEvent[] = []
+  let captures = 0
+
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+    hasApiKey: () => true,
+    captureScreenContext: async () => {
+      captures += 1
+      return { screenshotBase64: "screen" }
+    },
+    streamVoiceAnswer: async ({ intent, transcript, onComplete }) => {
+      assert.equal(intent, "explain")
+      assert.equal(transcript, "class method and static method in python")
+      onComplete("done")
+    }
+  })
+
+  controller.start()
+  controller.handleTranscriptSegment({
+    ...createFinalSegment("class method and static method in python", 0.1),
+    submittedPrompt: true
+  })
+  await flushAsyncWork()
+
+  assert.equal(captures, 1)
+  assert.equal(controller.getState().status, "complete")
 })
 
 test("controller accepts a different software engineering question after completion", async () => {
