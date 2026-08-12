@@ -84,6 +84,7 @@ Initial correction examples:
 - `JIL`, `GIM`, `gill`, or spoken letter forms near Python context -> `GIL`
 - pause punctuation and immediate repeated words such as `to... to` -> `to`
 - `sequel` -> `SQL`
+- `s q l` -> `SQL`
 - `rest api` -> `REST API`
 - `fast api` -> `FastAPI`
 - `node js` -> `Node.js`

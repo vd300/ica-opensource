@@ -47,6 +47,9 @@ test("detectVoiceIntent matches specific and general assistance prompts", () => 
   assert.equal(detectVoiceIntent("why is this failing"), "debug")
   assert.equal(detectVoiceIntent("what should I do here"), "solve")
   assert.equal(detectVoiceIntent("can you give me the solution"), "solve")
+  assert.equal(detectVoiceIntent("write a SQL query for the orders table"), "solve")
+  assert.equal(detectVoiceIntent("write a sequel query for the users table"), "solve")
+  assert.equal(detectVoiceIntent("orders table and customers table in SQL"), "explain")
   assert.equal(detectVoiceIntent("what is JIL in python"), "explain")
   assert.equal(detectVoiceIntent("class method and static method in python"), "explain")
   assert.equal(detectVoiceIntent("how does Kafka work"), "solve")
@@ -68,6 +71,8 @@ test("detectVoiceIntent matches specific and general assistance prompts", () => 
 test("normalizeVoiceTranscript corrects common software engineering speech terms", () => {
   assert.equal(normalizeVoiceTranscript("what is JIL in python"), "what is GIL in python")
   assert.equal(normalizeVoiceTranscript("explain GIM in python"), "explain GIL in python")
+  assert.equal(normalizeVoiceTranscript("write a sequel query"), "write a SQL query")
+  assert.equal(normalizeVoiceTranscript("debug this s q l join"), "debug this SQL join")
   assert.equal(normalizeVoiceTranscript("design a rest api in fast api"), "design a REST API in FastAPI")
   assert.equal(
     normalizeVoiceTranscript("have you... ever.. offloaded data to... to another server"),

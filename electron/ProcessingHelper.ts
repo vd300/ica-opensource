@@ -164,6 +164,25 @@ export class ProcessingHelper {
     return this.isGpt5Model(model) ? {} : { temperature };
   }
 
+  private getSqlQuestionGuidance(): string {
+    return `SQL question handling:
+- Treat SQL, database, schema, table, column, row, join, aggregate, window function, CTE, subquery, index, query plan, and result-set prompts as first-class coding interview questions.
+- Clearly distinguish SQL tables from pandas DataFrames. If the prompt shows SQL tables, schemas, rows, or asks for a query, answer with SQL and database terminology.
+- Do not convert a SQL question into pandas/Python unless the prompt explicitly asks for pandas, DataFrames, or Python data analysis.
+- For SQL solutions, provide the query first, then a concise explanation of joins, filters, grouping, ordering, window functions, and edge cases.
+- For SQL debugging, inspect table names, aliases, join keys, NULL handling, aggregation level, WHERE vs HAVING, window partitions/order, and dialect-specific syntax before suggesting fixes.`;
+  }
+
+  private getProblemExtractionGuidance(language: string): string {
+    return `You are a coding challenge interpreter. Analyze the screenshots of the coding problem and extract all relevant information. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, code_explanation, data_flow, high_level_design, low_level_design. Just return the structured JSON without any other text.
+
+Preferred coding language: ${language}.
+
+${this.getSqlQuestionGuidance()}
+
+When the screenshot contains SQL tables, schemas, sample rows, query text, or expected result sets, preserve table names, column names, relationships, and expected output in the extracted fields. Mark it as a SQL/database problem in the problem_statement wording instead of describing it as a pandas/DataFrame task.`;
+  }
+
   private async waitForInitialization(
     mainWindow: BrowserWindow
   ): Promise<void> {
@@ -512,14 +531,14 @@ export class ProcessingHelper {
         const messages = [
           {
             role: "system" as const, 
-            content: "You are a coding challenge interpreter. Analyze the screenshot of the coding problem and extract all relevant information. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output, code_explanation,data_flow,high_level_design,low_level_design. Just return the structured JSON without any other text."
+            content: this.getProblemExtractionGuidance(language)
           },
           {
             role: "user" as const,
             content: [
               {
                 type: "text" as const, 
-                text: `Extract the coding problem details from these screenshots. Return in JSON format. Preferred coding language we gonna use for this problem is ${language}.`
+                text: `Extract the coding problem details from these screenshots. Return in JSON format. Preferred coding language we gonna use for this problem is ${language}.\n\n${this.getSqlQuestionGuidance()}`
               },
               ...imageDataList.map(data => ({
                 type: "image_url" as const,
@@ -567,7 +586,7 @@ export class ProcessingHelper {
               role: "user",
               parts: [
                 {
-                  text: `You are a coding challenge interpreter. Analyze the screenshots of the coding problem and extract all relevant information. Return the information in JSON format with these fields: problem_statement, constraints, example_input, example_output. Just return the structured JSON without any other text. Preferred coding language we gonna use for this problem is ${language}.`
+                  text: this.getProblemExtractionGuidance(language)
                 },
                 ...imageDataList.map(data => ({
                   inlineData: {
@@ -625,7 +644,7 @@ export class ProcessingHelper {
               content: [
                 {
                   type: "text" as const,
-                  text: `Extract the coding problem details from these screenshots. Return in JSON format with these fields: problem_statement, constraints, example_input, example_output. Preferred coding language is ${language}.`
+                  text: this.getProblemExtractionGuidance(language)
                 },
                 ...imageDataList.map(data => ({
                   type: "image" as const,
@@ -787,6 +806,8 @@ ${problemInfo.example_output || "No example output provided."}
 
 LANGUAGE: ${language}
 
+${this.getSqlQuestionGuidance()}
+
 I need the response in the following format:
 1. Code: A clean, optimized implementation in ${language}
 2. Your Thoughts: A list of key insights and reasoning behind your approach
@@ -801,7 +822,7 @@ I need the response in the following format:
 
 For complexity explanations, please be thorough. For example: "Time complexity: O(n) because we iterate through the array only once. This is optimal as we need to examine each element at least once to find the solution." or "Space complexity: O(n) because in the worst case, we store all elements in the hashmap. The additional space scales linearly with the input size."
 
-Your solution should be efficient, well-commented, and handle edge cases.
+Your solution should be efficient, well-commented, and handle edge cases. For SQL questions, the Code section must contain the SQL query unless pandas/Python is explicitly requested.
 `;
 
       let responseContent = "";
@@ -821,7 +842,7 @@ Your solution should be efficient, well-commented, and handle edge cases.
           {
             model: solutionModel,
             messages: [
-              { role: "system", content: "You are an expert coding interview assistant. Provide clear, optimal solutions with detailed explanations." },
+              { role: "system", content: `You are an expert coding interview assistant. Provide clear, optimal solutions with detailed explanations.\n\n${this.getSqlQuestionGuidance()}` },
               { role: "user", content: promptText }
             ],
             ...this.getOpenAITokenLimitParam(solutionModel, 8000),
@@ -1179,7 +1200,7 @@ Your solution should be efficient, well-commented, and handle edge cases.
             {
               role: "system",
               content:
-                "You are a concise software-engineering interview assistant. Answer software engineering interview questions across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, system design, and behavioral experience questions about engineering work. When a transcript is ambiguous, answer it if it could plausibly be a technical interview question. Briefly decline only clearly non-engineering topics."
+                `You are a concise software-engineering interview assistant. Answer software engineering interview questions across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, system design, and behavioral experience questions about engineering work. When a transcript is ambiguous, answer it if it could plausibly be a technical interview question. Briefly decline only clearly non-engineering topics.\n\n${this.getSqlQuestionGuidance()}`
             },
             {
               role: "user",
@@ -1269,7 +1290,7 @@ Your solution should be efficient, well-commented, and handle edge cases.
       model: config.voiceTranscriptionModel || "gpt-4o-transcribe",
       language,
       prompt:
-        "Software engineering interview vocabulary: Kafka, message queues, event streaming, distributed systems, rate limiting, throttling, quotas, retries, exponential backoff, circuit breakers, Python, GIL, Global Interpreter Lock, Java, JavaScript, TypeScript, React, Node.js, backend, frontend, infrastructure, REST API, SQL, Postgres, Redis, Docker, Kubernetes, system design, algorithms, data structures, time complexity, space complexity, data migration, offloading data, uploading data, servers, production systems."
+        "Software engineering interview vocabulary: Kafka, message queues, event streaming, distributed systems, rate limiting, throttling, quotas, retries, exponential backoff, circuit breakers, Python, GIL, Global Interpreter Lock, Java, JavaScript, TypeScript, React, Node.js, backend, frontend, infrastructure, REST API, SQL, SQL query, database schema, table, column, row, join, aggregate, group by, having, CTE, window function, Postgres, MySQL, SQLite, Redis, Docker, Kubernetes, system design, algorithms, data structures, time complexity, space complexity, data migration, offloading data, uploading data, servers, production systems."
     });
 
     return transcription.text?.trim() || "";
@@ -1313,8 +1334,11 @@ Scope:
 - Treat behavioral or experience questions as in scope when they involve engineering work, for example uploading, offloading, migrating, syncing, or serving data across servers or services.
 - Treat near-match speech recognition terms as technical vocabulary when context supports it, for example "JIL" or "GIM" in Python means "GIL".
 - When the transcript is ambiguous, answer it if it could plausibly be a technical interview question.
+- Treat SQL questions and queries as in-scope coding interview prompts. Distinguish SQL tables from pandas DataFrames, and answer SQL table/schema/query prompts with SQL unless pandas is explicitly requested.
 - Only use the off-topic reply for clearly non-engineering topics.
 - Keep the answer interview-ready: prioritize what the candidate should say, then the implementation or reasoning.
+
+${this.getSqlQuestionGuidance()}
 
 ${intentInstructions[intent]}
 ${styleInstructions[responseStyle]}
@@ -1462,6 +1486,8 @@ Respond immediately with the most useful answer first. Keep it stream-friendly a
             role: "system" as const, 
             content: `You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
 
+${this.getSqlQuestionGuidance()}
+
 Your response MUST follow this exact structure with these section headers (use ### for headers):
 ### Issues Identified
 - List each issue as a bullet point with clear explanation
@@ -1489,7 +1515,9 @@ If you include code examples, use proper markdown code blocks with language spec
 1. What issues you found in my code
 2. Specific improvements and corrections
 3. Any optimizations that would make the solution better
-4. A clear explanation of the changes needed` 
+4. A clear explanation of the changes needed
+
+${this.getSqlQuestionGuidance()}` 
               },
               ...imageDataList.map(data => ({
                 type: "image_url" as const,
@@ -1528,6 +1556,8 @@ If you include code examples, use proper markdown code blocks with language spec
 You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
 
 I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution.
+
+${this.getSqlQuestionGuidance()}
 
 YOUR RESPONSE MUST FOLLOW THIS EXACT STRUCTURE WITH THESE SECTION HEADERS:
 ### Issues Identified
@@ -1609,6 +1639,8 @@ If you include code examples, use proper markdown code blocks with language spec
 You are a coding interview assistant helping debug and improve solutions. Analyze these screenshots which include either error messages, incorrect outputs, or test cases, and provide detailed debugging help.
 
 I'm solving this coding problem: "${problemInfo.problem_statement}" in ${language}. I need help with debugging or improving my solution.
+
+${this.getSqlQuestionGuidance()}
 
 YOUR RESPONSE MUST FOLLOW THIS EXACT STRUCTURE WITH THESE SECTION HEADERS:
 ### Issues Identified

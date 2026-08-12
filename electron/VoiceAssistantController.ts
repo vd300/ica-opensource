@@ -71,7 +71,9 @@ const INTENT_PATTERNS: IntentPattern[] = [
       /\bhow (would|do) (you|we) (solve|approach|handle) (this|it|the problem|the question|the prompt)\b/i,
       /\bwhat (should|would) (i|we|you) do (here|next|for this)\b/i,
       /\bcan you (help|answer|do) (this|it)\b/i,
-      /\b(can you )?give me the solution\b/i
+      /\b(can you )?give me the solution\b/i,
+      /\bwrite (a |the )?(sql )?query\b/i,
+      /\bfind (all|the|each)?\s*\w* (from|in) (the )?\w+ table\b/i
     ]
   },
   {
@@ -112,6 +114,8 @@ const TECHNICAL_TRANSCRIPT_CORRECTIONS: Array<[RegExp, string]> = [
   [/\bglobal interpreter lock\b/gi, "Global Interpreter Lock"],
   [/\bcough ka\b/gi, "Kafka"],
   [/\bsequel\b/gi, "SQL"],
+  [/\bs q l\b/gi, "SQL"],
+  [/\bpost grace\b/gi, "Postgres"],
   [/\brest api\b/gi, "REST API"],
   [/\bfast api\b/gi, "FastAPI"],
   [/\bnode js\b/gi, "Node.js"],
@@ -172,6 +176,7 @@ const isLikelyTechnicalTopicFragment = (text: string): boolean => {
 
   return (
     /\bin (python|java|javascript|typescript|go|golang|c\+\+|c#|csharp|sql|react|node|node\.js)\b/i.test(normalizedText) ||
+    /\b(sql|database|schema|query|table|tables|column|columns|rows?|joins?|group by|having|cte|window function)\b/i.test(normalizedText) ||
     /\b(vs|versus)\b/i.test(normalizedText)
   )
 }

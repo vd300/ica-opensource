@@ -60,9 +60,17 @@
 - [x] Add non-streaming fallback for providers that are not yet wired for streaming.
 - [x] Add concise voice-specific prompts for solve, explain, complexity, and debug intents.
 - [x] Tune voice prompts for broad software-engineering interview scope and concise off-topic handling.
+- [x] Add SQL query/table guidance so voice prompts answer SQL with SQL instead of pandas unless pandas is explicitly requested.
 - [x] Add provider transcription vocabulary hints for software-engineering interview terms.
 - [x] Send `voice:answer-start`, `voice:answer-chunk`, `voice:answer-complete`, and `voice:error` events.
 - [x] Support abort through the request `AbortSignal`.
+
+## Phase 7A - SQL Screenshot and Debug Support
+- [x] Add SQL-aware extraction guidance for screenshot problem analysis.
+- [x] Preserve SQL table names, columns, schemas, sample rows, and expected result sets during extraction.
+- [x] Add SQL solution guidance for query-first answers.
+- [x] Add SQL debug-shot guidance for aliases, joins, NULL handling, aggregation, WHERE vs HAVING, window functions, and dialect syntax.
+- [x] Document that SQL tables must not be confused with pandas DataFrames.
 
 ## Phase 8 - Renderer Overlay
 - [x] Create `src/components/VoiceAssistant/VoiceAssistantOverlay.tsx`.
@@ -84,6 +92,7 @@
 ## Phase 10 - Tests and QA
 - [x] Unit test intent matching.
 - [x] Unit test transcript normalization for technical terms such as `GIL` and pause artifacts.
+- [x] Unit test SQL speech normalization and SQL query intent matching.
 - [x] Unit test that explicit freeform questions reach the answer layer for semantic scope handling.
 - [x] Unit test debounce behavior.
 - [x] Unit test recording restart and submit request behavior.

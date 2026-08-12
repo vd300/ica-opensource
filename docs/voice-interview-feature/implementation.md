@@ -225,6 +225,19 @@ Prompt strategy:
 - Tell the model to answer software-engineering interview topics broadly, answer ambiguous prompts when they could plausibly be technical interview questions, and briefly decline clearly unrelated questions.
 - Tell the model to interpret near-match speech recognition terms as technical vocabulary when the surrounding context supports it, such as `JIL` or `GIM` in Python meaning `GIL`.
 
+### SQL Question Handling
+SQL/database prompts are supported in both the voice fast path and the screenshot/debug-shot flows.
+
+Expected behavior:
+- Treat SQL, database, schema, table, column, row, join, aggregate, window function, CTE, subquery, index, query plan, and result-set prompts as first-class coding interview questions.
+- Preserve table names, column names, relationships, sample rows, query text, and expected result sets during screenshot extraction.
+- Clearly distinguish SQL tables from pandas DataFrames. If the prompt shows SQL tables, schemas, rows, or asks for a query, answer with SQL and database terminology.
+- Do not convert SQL prompts into pandas/Python unless the prompt explicitly asks for pandas, DataFrames, or Python data analysis.
+- For SQL solutions, provide the query first, then explain joins, filters, grouping, ordering, window functions, and edge cases.
+- For SQL debugging, inspect aliases, join keys, NULL handling, aggregation level, WHERE vs HAVING, window partitions/order, and dialect-specific syntax before suggesting fixes.
+
+Voice transcription and intent detection should normalize common spoken forms such as `sequel` and `s q l` to `SQL`, and phrases like "write a SQL query" should trigger answer generation.
+
 Prompt sketch:
 
 ```text
