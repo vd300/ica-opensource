@@ -1,19 +1,51 @@
 ﻿# CodeInterviewAssist (ICA)
 
-An open-source desktop assistant for coding and software engineering interview practice. Capture a problem from your screen or submit a spoken question, then get AI-generated solutions, explanations, and debugging help using your own API key.
+An open-source desktop assistant for coding and software engineering interview practice. Capture a problem from your screen or submit a spoken question, then get AI-generated solutions, explanations, architecture diagrams, and debugging help using your own API key.
 
-Built with Electron, React, and TypeScript. The application supports OpenAI, Google Gemini, and Anthropic, with no application subscription or sign-in required. Provider API usage may incur charges.
+Built with Electron, React, and TypeScript. The application supports OpenAI, Google Gemini, and Anthropic, with no application subscription, account, credit system, or sign-in required. You own the source code and choose the AI provider. Provider API usage may incur charges.
+
+> **No $60/month app subscription.** A $60 monthly subscription costs **$720 per year**. ICA itself is free under the AGPL; you supply an API key and pay only your provider's usage charges. Actual API cost depends on the provider, model, screenshots, audio, and usage volume.
 
 ## Features
 
-- **Screenshot workflow:** Capture up to five screenshots per queue, extract problem requirements, generate solutions, and capture follow-up screenshots for debugging.
-- **Solution explanations:** View code, reasoning, and time/space complexity analysis, with diagram rendering when a response includes diagrams.
-- **Voice assistant:** Record a question, explicitly submit it, and receive an answer using the transcript and a fresh screenshot as context. Questions can cover coding, SQL, debugging, complexity, and broader software engineering topics.
-- **Provider and model settings:** Choose OpenAI, Gemini, or Anthropic and select separate models for extraction, solution generation, and debugging.
+- **Screenshot-to-solution workflow:** Capture up to five screenshots per queue, extract the problem, and generate a structured solution without copying the prompt by hand.
+- **Detailed technical output:** View optimized code, reasoning, code explanations, edge-case guidance, and time/space complexity analysis.
+- **Design coverage:** Generate high-level design, low-level design, and data-flow explanations, with Mermaid diagrams when the response includes diagram definitions.
+- **Follow-up debugging:** Capture code, errors, or failing output after the first solution and request targeted fixes and improvements.
+- **Voice interview assistant:** Ask coding, SQL, debugging, complexity, system-design, backend, frontend, infrastructure, or behavioral engineering questions using voice and current-screen context.
+- **Two voice workflows:** Use explicit record/submit controls on this branch, or switch to the `voice-assistant-fixes` branch for automatic speech processing and answer triggering.
+- **Multiple AI providers:** Choose OpenAI, Gemini, or Anthropic instead of being tied to one model vendor.
+- **Separate models by task:** Configure different models for screenshot extraction, solution generation, and debugging to balance quality, speed, and API cost.
+- **Streaming responses:** Supported OpenAI solution and voice responses appear progressively while they are generated.
 - **Language selection:** Python, JavaScript, Java, Go, C++, Swift, Kotlin, Ruby, SQL, R, and C#.
-- **Window controls:** Always-on-top overlay, global shortcuts, visibility toggle, movement, opacity, and zoom controls.
+- **Desktop overlay controls:** Use an always-on-top, frameless window with global shortcuts for capture, visibility, movement, opacity, and zoom.
+- **Local configuration:** Keep application settings on your computer, with no ICA-hosted account or payment system.
 
 The app runs on your desktop, but AI processing uses external provider APIs. See [Data and privacy](#data-and-privacy) for what is stored and sent.
+
+## ICA compared with a $60/month subscription
+
+This comparison uses a generic interview-assistant subscription priced at $60 per month. Paid services differ, so check a specific product's current feature list and terms before choosing.
+
+| Area | ICA | Typical $60/month subscription |
+| --- | --- | --- |
+| Application price | Free and open source | $60/month, or $720/year if maintained for 12 months |
+| AI cost | Bring your own key; usage billed separately by your provider | Often bundled, capped, credit-based, or subject to fair-use limits |
+| Providers | OpenAI, Gemini, and Anthropic are implemented | Commonly restricted to models selected by the service |
+| Model control | Separate model selection for extraction, solutions, and debugging | Depends on the service and plan |
+| Screenshot problem extraction | Included | Common in comparable paid tools |
+| Code, explanation, and complexity | Included | Common in comparable paid tools |
+| HLD, LLD, data flow, and diagrams | Included when generated by the selected model | Varies by product |
+| Follow-up screenshot debugging | Included | Varies by product |
+| Voice workflow | Manual record/submit here; automated workflow on a separate branch | Often included, but limits and behavior vary |
+| Supported answer languages | 11 selectable languages, including SQL | Varies by product |
+| Source-code access | Full source; modify and self-build under AGPL terms | Usually closed source |
+| Account and recurring billing | No ICA account or recurring app fee | Account and recurring subscription generally required |
+| Setup | Install dependencies, supply an API key, and run or package locally | Usually faster: install and sign in |
+| Updates and support | Community-maintained; no guaranteed SLA | Usually managed updates and customer support |
+| Privacy model | Local app, but selected content is sent to your AI provider | Content is processed under the service's and its providers' policies |
+
+ICA is a strong fit if you value source access, provider choice, customization, and avoiding a recurring application fee. A commercial subscription may suit you better if you prefer turnkey installation, bundled usage, polished onboarding, and dedicated support. ICA's zero-dollar application price does not mean every session is free: provider API charges remain your responsibility.
 
 ## Quick start
 
