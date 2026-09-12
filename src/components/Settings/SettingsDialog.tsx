@@ -13,6 +13,9 @@ import { Button } from "../ui/button";
 import { Settings } from "lucide-react";
 import { useToast } from "../../contexts/toast";
 
+import type { VoiceAudioSettings } from "../../types/voiceAudio";
+import { DEFAULT_VOICE_AUDIO_SETTINGS, sanitizeVoiceAudioSettings, voiceAudioRequirementError } from "../../types/voiceSettings";
+
 type APIProvider = "openai" | "gemini" | "anthropic";
 type VoiceResponseStyle = "concise" | "code-first" | "detailed";
 type VoiceTranscriptionModel = "gpt-4o-transcribe" | "gpt-4o-mini-transcribe";
@@ -221,6 +224,8 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
     useState<VoiceTranscriptionModel>("gpt-4o-transcribe");
   const [voiceTriggerConfidenceThreshold, setVoiceTriggerConfidenceThreshold] = useState(0.3);
   const [voiceResponseStyle, setVoiceResponseStyle] = useState<VoiceResponseStyle>("concise");
+  const [audioSettings, setAudioSettings] = useState<VoiceAudioSettings>({ ...DEFAULT_VOICE_AUDIO_SETTINGS });
+  const audioRequirementError = voiceAudioRequirementError(audioSettings.voiceAudioService, apiProvider, apiKey);
   const [isLoading, setIsLoading] = useState(false);
   const { showToast } = useToast();
 
@@ -244,7 +249,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
   useEffect(() => {
     if (open) {
       setIsLoading(true);
-      interface Config {
+      interface Config extends Partial<VoiceAudioSettings> {
         apiKey?: string;
         apiProvider?: APIProvider;
         extractionModel?: string;
@@ -261,6 +266,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
       window.electronAPI
         .getConfig()
         .then((config: Config) => {
+          setAudioSettings(sanitizeVoiceAudioSettings(config));
           setApiKey(config.apiKey || "");
           setApiProvider(config.apiProvider || "openai");
           setExtractionModel(config.extractionModel || "gpt-4o");
@@ -322,6 +328,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         voiceAssistantEnabled,
         voiceRecognitionLanguage,
         voiceTranscriptionModel,
+        ...sanitizeVoiceAudioSettings(audioSettings),
         voiceTriggerConfidenceThreshold,
         voiceResponseStyle,
       });
@@ -330,10 +337,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         showToast("Success", "Settings saved successfully", "success");
         handleOpenChange(false);
         
-        // Force reload the app to apply the API key
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
+        // Main-process clients receive config-updated; preserve active microphone capture.
       }
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -576,8 +580,36 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
               </div>
 
               <div className="space-y-2">
+                <label className="text-xs text-white/60" htmlFor="voiceAudioService">Audio Service</label>
+                <select id="voiceAudioService" value={audioSettings.voiceAudioService}
+                  onChange={(e) => setAudioSettings({ ...audioSettings, voiceAudioService: e.target.value as VoiceAudioSettings["voiceAudioService"] })}
+                  className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white">
+                  <option value="legacy">Current recognition</option>
+                  <option value="whisper">Whisper API (whisper-1)</option>
+                  <option value="gpt-live">GPT-Live (gpt-live-1)</option>
+                </select>
+                <label className="block text-xs text-white/60" htmlFor="voiceSubmissionMode">Audio Submission</label>
+                <select id="voiceSubmissionMode" disabled={audioSettings.voiceAudioService === "gpt-live"} value={audioSettings.voiceSubmissionMode}
+                  onChange={(e) => setAudioSettings({ ...audioSettings, voiceSubmissionMode: e.target.value as VoiceAudioSettings["voiceSubmissionMode"] })}
+                  className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white">
+                  <option value="manual">Manual (submit shortcut)</option>
+                  <option value="automatic">Automatic (after speech ends)</option>
+                </select>
+                <label className="block text-xs text-white/60" htmlFor="voiceAutoSubmitSilenceMs">Automatic Pause (milliseconds)</label>
+                <Input id="voiceAutoSubmitSilenceMs" type="number" min={500} max={5000} step={100}
+                  disabled={audioSettings.voiceAudioService === "gpt-live" || audioSettings.voiceSubmissionMode !== "automatic"}
+                  value={Number.isFinite(audioSettings.voiceAutoSubmitSilenceMs) ? audioSettings.voiceAutoSubmitSilenceMs : ""}
+                  onChange={(e) => setAudioSettings({ ...audioSettings, voiceAutoSubmitSilenceMs: e.target.valueAsNumber })}
+                  onBlur={() => setAudioSettings(sanitizeVoiceAudioSettings(audioSettings))} />
+                <p className="text-xs text-white/50">Pause range: 500 to 5,000 ms; default: 1,500 ms. Changes apply to the next recording. Disabling voice mode stops recording immediately.</p>
+                <p className="text-xs text-white/50">GPT-Live is a continuous conversation: your speech and its responses appear live, with output audio muted. Ctrl+7 (Cmd+7 on Mac) toggles the microphone while answers keep streaming. Stop voice mode to end the session. It uses its own conversation and a gpt-5.6-luna reasoning backend, independent of Whisper and the file-answer pipeline.</p>
+                <p className="text-xs text-white/50">Submission and pause settings apply to Whisper and Current recognition only. Whisper uploads one complete recording when you submit; Automatic mode submits after detected speech and the configured pause. GPT-Live responds naturally without a submit shortcut or transcript review.</p>
+                {audioRequirementError && <p role="alert" className="text-xs text-amber-300">{audioRequirementError}</p>}
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-xs text-white/60" htmlFor="voiceTranscriptionModel">
-                  Transcription Model
+                  Current Recognition Fallback Model
                 </label>
                 <select
                   id="voiceTranscriptionModel"
@@ -585,7 +617,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
                   onChange={(e) =>
                     setVoiceTranscriptionModel(e.target.value as VoiceTranscriptionModel)
                   }
-                  disabled={apiProvider !== "openai"}
+                  disabled={apiProvider !== "openai" || audioSettings.voiceAudioService !== "legacy"}
                   className="w-full rounded-md border border-white/10 bg-black/70 px-2 py-2 text-sm text-white outline-none focus:border-white/25 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {voiceTranscriptionModels.map((model) => (

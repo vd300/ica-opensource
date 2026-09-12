@@ -36,6 +36,8 @@ export interface VoiceAssistantControllerDeps {
     enabled: boolean
     minConfidence: number
   }
+  onRecordingStart?: () => void
+  onRecordingStop?: () => void
   hasApiKey?: () => boolean
   captureScreenContext?: (signal: AbortSignal) => Promise<VoiceScreenContext>
   streamVoiceAnswer?: (params: VoiceAnswerParams) => Promise<void>
@@ -242,7 +244,6 @@ export class VoiceAssistantController {
     }
 
     this.send(VOICE_IPC_CHANNELS.SUBMIT_RECORDING)
-    this.sendStatus("Submitting voice prompt...")
 
     return { success: true }
   }
@@ -273,6 +274,7 @@ export class VoiceAssistantController {
         requestId: null,
         lastTriggeredText: null
       }
+      this.deps.onRecordingStart?.()
       this.send(VOICE_IPC_CHANNELS.MODE_STARTED)
       this.sendStatus()
       return { success: true }
@@ -287,6 +289,7 @@ export class VoiceAssistantController {
       requestId: null
     }
 
+    this.deps.onRecordingStart?.()
     this.send(VOICE_IPC_CHANNELS.MODE_STARTED)
     this.sendStatus()
 
@@ -294,6 +297,7 @@ export class VoiceAssistantController {
   }
 
   public stop(): VoiceIpcResult {
+    this.deps.onRecordingStop?.()
     const hadActiveRequest = Boolean(this.state.activeAbortController)
     const requestId = this.state.requestId
 

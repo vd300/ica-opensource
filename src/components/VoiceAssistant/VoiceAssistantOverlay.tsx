@@ -1,6 +1,7 @@
-import { Loader2, Mic, Send, Square, Wand2 } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { Loader2, Mic, MicOff, Send, Square, Wand2 } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "../ui/button"
+import { LiveConversationView } from "./LiveConversationView"
 import { useSpeechRecognition } from "./useSpeechRecognition"
 import type {
   VoiceAnswerChunkPayload,
@@ -58,6 +59,14 @@ export function VoiceAssistantOverlay() {
   const recognitionState = useSpeechRecognition()
   const [state, setState] = useState<OverlayState>(initialState)
   const [typedPrompt, setTypedPrompt] = useState("")
+  const sendingPrompt = useRef(false)
+  const submitPromptRef = useRef<() => void>(() => {})
+
+  useEffect(() => window.electronAPI.onVoiceSubmitRecording(() => submitPromptRef.current()), [])
+
+  useEffect(() => {
+    if (recognitionState.reviewText !== null) setTypedPrompt(recognitionState.reviewText)
+  }, [recognitionState.reviewText])
 
   useEffect(() => {
     if (!recognitionState.interimTranscript && !recognitionState.finalTranscript) {
@@ -89,11 +98,8 @@ export function VoiceAssistantOverlay() {
   useEffect(() => {
     const cleanupFunctions = [
       window.electronAPI.onVoiceModeStarted(() => {
-        setState({
-          ...initialState,
-          isOpen: true,
-          status: "listening"
-        })
+        setState({ ...initialState, isOpen: true, status: "listening" })
+        setTypedPrompt("")
       }),
       window.electronAPI.onVoiceModeStopped(() => {
         setState(initialState)
@@ -190,39 +196,54 @@ export function VoiceAssistantOverlay() {
 
   const latestTranscript = state.interimTranscript || state.finalTranscript
   const displayStatus = useMemo(() => {
+    if (recognitionState.isLive) return recognitionState.error ? "Connection error" : recognitionState.isListening ? recognitionState.isMicrophoneMuted ? "Live / Mic muted" : "Live" : recognitionState.liveCaptions.length ? "Session ended" : "Connecting"
+    if (recognitionState.isSubmitting) return "Submitting"
     if (state.activeIntent) {
       return `${statusLabels[state.status]} - ${intentLabels[state.activeIntent]}`
     }
 
     return statusLabels[state.status]
-  }, [state.activeIntent, state.status])
+  }, [state.activeIntent, state.status, recognitionState.isSubmitting, recognitionState.isLive, recognitionState.isListening, recognitionState.error, recognitionState.liveCaptions.length, recognitionState.isMicrophoneMuted])
 
   if (!state.isOpen) {
+    submitPromptRef.current = () => {}
     return null
   }
 
-  const isBusy = busyStatuses.has(state.status)
+  const isBusy = recognitionState.isSubmitting || busyStatuses.has(state.status)
 
-  const submitTypedPrompt = () => {
+  const submitTypedPrompt = async () => {
     const text = typedPrompt.trim()
-    if (!text) {
+    if (recognitionState.isLive || !text || isBusy || sendingPrompt.current) {
       return
     }
 
+    sendingPrompt.current = true
+    recognitionState.cancelRecording()
     setState((current) => ({
       ...current,
       error: null,
       finalTranscript: text,
       interimTranscript: ""
     }))
-    setTypedPrompt("")
-    window.electronAPI.sendVoiceTranscriptSegment({
+    try {
+      const result = await window.electronAPI.sendVoiceTranscriptSegment({
       text,
       isFinal: true,
       confidence: 1,
       submittedPrompt: true,
       receivedAt: Date.now()
-    })
+      })
+      if (!result.success) throw new Error(result.error || "Unable to send the prompt. Please retry.")
+      setTypedPrompt("")
+    } catch (error) {
+      setState(current => ({ ...current, status: "error", error: error instanceof Error ? error.message : "Unable to send the prompt. Please retry." }))
+    } finally {
+      sendingPrompt.current = false
+    }
+  }
+  submitPromptRef.current = () => {
+    if (state.error && !recognitionState.isListening) void submitTypedPrompt()
   }
 
   return (
@@ -230,7 +251,9 @@ export function VoiceAssistantOverlay() {
       <div className="flex h-11 items-center justify-between border-b border-white/10 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10">
-            {isBusy ? (
+            {recognitionState.isLive && recognitionState.isMicrophoneMuted ? (
+              <MicOff className="h-4 w-4 text-amber-300" />
+            ) : isBusy ? (
               <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
             ) : state.status === "listening" ? (
               <Mic className="h-4 w-4 text-emerald-300" />
@@ -260,7 +283,23 @@ export function VoiceAssistantOverlay() {
         </Button>
       </div>
 
-      <div className="max-h-72 min-h-28 overflow-y-auto px-3 py-3">
+      <div className="px-3 pt-2 text-xs text-white/55">
+        {recognitionState.modeLabel}{!recognitionState.isLive && " / One question per recording / 2-minute limit; reaching it cancels without sending."}
+      </div>
+      {recognitionState.isLive && <div className="px-3 pt-2">
+        <button type="button" onClick={recognitionState.toggleMicrophone}
+          disabled={!recognitionState.isListening}
+          aria-pressed={recognitionState.isMicrophoneMuted}
+          aria-label={recognitionState.isMicrophoneMuted ? "Unmute microphone" : "Mute microphone"}
+          className="flex w-full items-center justify-between rounded-md border border-white/15 px-3 py-2 text-sm hover:bg-white/10 disabled:opacity-40">
+          <span className={recognitionState.isMicrophoneMuted ? "text-amber-300" : "text-emerald-300"}>
+            {recognitionState.isMicrophoneMuted ? "Mic muted - click to resume" : "Mute microphone"}
+          </span>
+          <kbd className="text-xs text-white/50">Ctrl+7 / Cmd+7</kbd>
+        </button>
+        {recognitionState.isMicrophoneMuted && recognitionState.isListening && <p role="status" className="pt-1 text-xs text-amber-200/80">Your speech is muted. The answer keeps streaming.</p>}
+      </div>}
+      {recognitionState.isLive ? <LiveConversationView answers={recognitionState.liveWrittenAnswers} captions={recognitionState.liveCaptions} listening={recognitionState.isListening} muted={recognitionState.isMicrophoneMuted} error={recognitionState.error} /> : <div className="max-h-72 min-h-28 overflow-y-auto px-3 py-3">
         {state.error ? (
           <div className="space-y-3">
             <div className="rounded-md border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">
@@ -284,6 +323,7 @@ export function VoiceAssistantOverlay() {
                 variant="ghost"
                 className="h-9 w-9 shrink-0 text-white/70 hover:bg-white/10 hover:text-white"
                 title="Send typed prompt"
+                disabled={isBusy || !typedPrompt.trim()}
                 onClick={submitTypedPrompt}
               >
                 <Send className="h-4 w-4" />
@@ -310,7 +350,7 @@ export function VoiceAssistantOverlay() {
               : "Speech recognition is unavailable."}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

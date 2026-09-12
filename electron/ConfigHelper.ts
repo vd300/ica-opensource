@@ -5,7 +5,10 @@ import { app } from "electron"
 import { EventEmitter } from "events"
 import { OpenAI } from "openai"
 
-interface Config {
+import type { VoiceAudioSettings } from "../src/types/voiceAudio"
+import { DEFAULT_VOICE_AUDIO_SETTINGS, sanitizeVoiceAudioSettings } from "../src/types/voiceSettings"
+
+export interface Config extends VoiceAudioSettings {
   apiKey: string;
   apiProvider: "openai" | "gemini" | "anthropic";  // Added provider selection
   extractionModel: string;
@@ -23,6 +26,7 @@ interface Config {
 export class ConfigHelper extends EventEmitter {
   private configPath: string;
   private defaultConfig: Config = {
+    ...DEFAULT_VOICE_AUDIO_SETTINGS,
     apiKey: "",
     apiProvider: "gemini", // Default to Gemini
     extractionModel: "gemini-2.0-flash", // Default to Flash for faster responses
@@ -160,6 +164,7 @@ export class ConfigHelper extends EventEmitter {
           mergedConfig.voiceTranscriptionModel
         );
 
+        Object.assign(mergedConfig, sanitizeVoiceAudioSettings(mergedConfig));
         return mergedConfig;
       }
       
@@ -249,6 +254,7 @@ export class ConfigHelper extends EventEmitter {
       }
       
       const newConfig = { ...currentConfig, ...updates };
+      Object.assign(newConfig, sanitizeVoiceAudioSettings(newConfig));
       this.saveConfig(newConfig);
       
       // Only emit update event for changes other than opacity
@@ -258,6 +264,9 @@ export class ConfigHelper extends EventEmitter {
           updates.debuggingModel !== undefined || updates.language !== undefined ||
           updates.voiceAssistantEnabled !== undefined ||
           updates.voiceRecognitionLanguage !== undefined ||
+          Object.prototype.hasOwnProperty.call(updates, "voiceAudioService") ||
+          Object.prototype.hasOwnProperty.call(updates, "voiceSubmissionMode") ||
+          Object.prototype.hasOwnProperty.call(updates, "voiceAutoSubmitSilenceMs") ||
           updates.voiceTranscriptionModel !== undefined ||
           updates.voiceTriggerConfidenceThreshold !== undefined ||
           updates.voiceResponseStyle !== undefined) {

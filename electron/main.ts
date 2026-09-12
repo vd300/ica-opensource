@@ -2,6 +2,9 @@ import { app, BrowserWindow, screen, shell, ipcMain, session } from "electron"
 import path from "path"
 import fs from "fs"
 import { initializeIpcHandlers } from "./ipcHandlers"
+import { VoiceAudioService } from "./VoiceAudioService"
+import { LiveVoiceService } from "./LiveVoiceService"
+import { initializeVoiceAudioIpc } from "./voiceAudioIpc"
 import { ProcessingHelper } from "./ProcessingHelper"
 import { ScreenshotHelper } from "./ScreenshotHelper"
 import { ShortcutsHelper } from "./shortcuts"
@@ -31,6 +34,7 @@ const state = {
   shortcutsHelper: null as ShortcutsHelper | null,
   processingHelper: null as ProcessingHelper | null,
   voiceAssistantController: null as VoiceAssistantController | null,
+  voiceAudioService: null as VoiceAudioService | null,
 
   // View and state management
   view: "queue" as "queue" | "solutions" | "debug",
@@ -136,6 +140,23 @@ function initializeHelpers() {
     getHasDebugged,
     PROCESSING_EVENTS: state.PROCESSING_EVENTS
   } as IProcessingHelperDeps)
+  state.voiceAudioService = new VoiceAudioService({
+    getConfig: () => configHelper.loadConfig(),
+    transcribe: (payload, config, signal) => state.processingHelper!.transcribeRecordingAudio(payload, config, signal),
+    createLive: key => new LiveVoiceService(key),
+    submit: text => {
+      const result = state.voiceAssistantController?.handleTranscriptSegment({ text, isFinal: true, confidence: 1, submittedPrompt: true, receivedAt: Date.now() })
+      if (!result?.success) throw new Error(result?.error || "Voice controller unavailable")
+    },
+    expired: () => {
+      state.voiceAssistantController?.stop()
+      state.voiceAssistantController?.handleRecognitionError({ code: "speech_unavailable", message: "Voice recording expired. Start a new recording.", recoverable: true })
+    }
+  })
+  initializeVoiceAudioIpc(state.voiceAudioService, getMainWindow, () => {
+    const voice = state.voiceAssistantController?.getState()
+    return Boolean(voice?.enabled && voice.status === "listening")
+  })
   state.voiceAssistantController = new VoiceAssistantController({
     getMainWindow,
     getVoiceSettings: () => {
@@ -145,6 +166,11 @@ function initializeHelpers() {
         minConfidence: config.voiceTriggerConfidenceThreshold
       }
     },
+    onRecordingStart: () => {
+      state.voiceAudioService?.cancelAll()
+      state.processingHelper?.captureVoiceRecordingConfig()
+    },
+    onRecordingStop: () => state.voiceAudioService?.cancelAll(),
     hasApiKey: () => configHelper.hasApiKey(),
     captureScreenContext,
     streamVoiceAnswer: (params) => {
@@ -156,6 +182,8 @@ function initializeHelpers() {
     }
   })
   configHelper.on("config-updated", (config) => {
+    const { apiKey: _apiKey, ...publicConfig } = config
+    getMainWindow()?.webContents.send("config-updated", publicConfig)
     if (!config.voiceAssistantEnabled) {
       state.voiceAssistantController?.stop()
     }
@@ -274,6 +302,10 @@ async function createWindow(): Promise<void> {
   state.mainWindow = new BrowserWindow(windowSettings)
 
   // Add more detailed logging for window events
+  state.mainWindow.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) stopVoiceMode()
+  })
+  state.mainWindow.webContents.on("render-process-gone", () => stopVoiceMode())
   state.mainWindow.webContents.on("did-finish-load", () => {
     console.log("Window finished loading")
   })
@@ -414,6 +446,7 @@ function handleWindowResize(): void {
 }
 
 function handleWindowClosed(): void {
+  stopVoiceMode()
   state.mainWindow = null
   state.isWindowVisible = false
   state.windowPosition = null
@@ -660,8 +693,19 @@ app.on("activate", () => {
   }
 })
 
-app.on("before-quit", () => {
+let voiceShutdownComplete = false
+let voiceShutdownPending = false
+app.on("before-quit", event => {
+  if (voiceShutdownComplete) return
+  event.preventDefault()
+  if (voiceShutdownPending) return
+  voiceShutdownPending = true
   stopVoiceMode()
+  // Live creation and hangup have bounded HTTP deadlines; await late-session cleanup too.
+  void (state.voiceAudioService?.dispose() || Promise.resolve()).finally(() => {
+    voiceShutdownComplete = true
+    app.quit()
+  })
 })
 
 // State getter/setter functions

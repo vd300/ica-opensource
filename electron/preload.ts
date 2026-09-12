@@ -1,6 +1,8 @@
 console.log("Preload script starting...")
 import { contextBridge, ipcRenderer } from "electron"
-import { VOICE_IPC_CHANNELS } from "./voiceIpc"
+import type { AppConfig } from "../src/types/electron"
+import type { VoiceAudioBridge } from "../src/types/voiceAdapter"
+import { VOICE_AUDIO_IPC, VOICE_IPC_CHANNELS } from "./voiceIpc"
 import type {
   VoiceAnswerChunkPayload,
   VoiceAnswerCompletePayload,
@@ -245,9 +247,23 @@ const electronAPI = {
   getPlatform: () => process.platform,
   
   // New methods for OpenAI API integration
+  voiceAudio: {
+    claim: payload => ipcRenderer.invoke(VOICE_AUDIO_IPC.CLAIM, payload),
+    begin: () => ipcRenderer.invoke(VOICE_AUDIO_IPC.BEGIN),
+    authorizeFile: recordingId => ipcRenderer.invoke(VOICE_AUDIO_IPC.AUTHORIZE_FILE, recordingId),
+    upload: payload => ipcRenderer.invoke(VOICE_AUDIO_IPC.UPLOAD, payload),
+    createLive: payload => ipcRenderer.invoke(VOICE_AUDIO_IPC.CREATE_LIVE, payload),
+    cancel: recordingId => ipcRenderer.invoke(VOICE_AUDIO_IPC.CANCEL, recordingId),
+    complete: payload => ipcRenderer.invoke(VOICE_AUDIO_IPC.COMPLETE, payload)
+  } satisfies VoiceAudioBridge,
   getConfig: () => ipcRenderer.invoke("get-config"),
-  updateConfig: (config: Record<string, unknown>) => 
+  updateConfig: (config: Partial<AppConfig>) =>
     ipcRenderer.invoke("update-config", config),
+  onConfigUpdated: (callback: (config: Omit<AppConfig, "apiKey">) => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, config: Omit<AppConfig, "apiKey">) => callback(config)
+    ipcRenderer.on("config-updated", subscription)
+    return () => ipcRenderer.removeListener("config-updated", subscription)
+  },
   onShowSettings: (callback: () => void) => {
     const subscription = () => callback()
     ipcRenderer.on("show-settings-dialog", subscription)

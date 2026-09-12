@@ -8,6 +8,9 @@ import {
 } from "../VoiceAssistantController"
 import { VOICE_IPC_CHANNELS } from "../voiceIpc"
 import type { VoiceAnswerChunkPayload } from "../../src/types/voice"
+import { VoiceAudioService } from "../VoiceAudioService"
+import type { Config } from "../ConfigHelper"
+import { DEFAULT_VOICE_AUDIO_SETTINGS } from "../../src/types/voiceSettings"
 
 type SentEvent = {
   channel: string
@@ -34,6 +37,70 @@ const createFinalSegment = (text: string, confidence = 0.9) => ({
 const flushAsyncWork = async () => {
   await delay(0)
   await delay(0)
+}
+
+for (const service of ["legacy", "whisper"] as const) {
+  for (const mode of ["manual", "automatic"] as const) {
+    test(`${service}/${mode}: submission preserves normalized screen context and one streamed answer`, async () => {
+      const events: SentEvent[] = []
+      let captures = 0
+      let cleanups = 0
+      let answers = 0
+      let uploads = 0
+      const text = "write a sequel query for the users table"
+      const controller = new VoiceAssistantController({
+        getMainWindow: () => createMainWindow(events),
+        getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+        hasApiKey: () => true,
+        captureScreenContext: async () => {
+          captures++
+          return { screenshotBase64: "screen-context", cleanup: async () => { cleanups++ } }
+        },
+        streamVoiceAnswer: async ({ transcript, screenshotBase64, onChunk, onComplete }) => {
+          answers++
+          assert.equal(transcript, "write a SQL query for the users table")
+          assert.equal(screenshotBase64, "screen-context")
+          onChunk("SELECT ")
+          onChunk("* FROM users;")
+          onComplete("SELECT * FROM users;")
+        }
+      })
+      const audio = new VoiceAudioService({
+        getConfig: () => ({ ...DEFAULT_VOICE_AUDIO_SETTINGS, voiceAssistantEnabled: true,
+          voiceAudioService: service, voiceSubmissionMode: mode, apiProvider: "openai",
+          apiKey: "test-key", voiceRecognitionLanguage: "en-US" }) as Config,
+        transcribe: async () => { uploads++; return text },
+        createLive: () => { throw new Error("This regression does not call the provider") },
+        submit: transcript => {
+          assert.equal(controller.handleTranscriptSegment({ ...createFinalSegment(transcript), submittedPrompt: true }).success, true)
+        }
+      })
+      try {
+        controller.start()
+        const { recordingId } = audio.begin(1)
+        const claims = await Promise.all(["silence", "shortcut", "shortcut"].map(reason =>
+          Promise.resolve().then(() => audio.claim(1, { recordingId, reason: reason as "silence" | "shortcut" }))))
+        assert.equal(claims.filter(Boolean).length, 1)
+        if (service === "whisper") {
+          audio.authorizeFile(1, recordingId)
+          await audio.upload(1, { recordingId, sequence: 0, mimeType: "audio/webm",
+            audioBase64: Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2]).toString("base64") })
+        }
+        audio.complete(1, { recordingId, text })
+        assert.throws(() => audio.complete(1, { recordingId, text }))
+        await flushAsyncWork()
+        assert.equal(uploads, service === "whisper" ? 1 : 0)
+        assert.equal(captures, 1)
+        assert.equal(answers, 1)
+        assert.equal(cleanups, 1)
+        assert.equal(controller.getState().status, "complete")
+        assert.equal(events.filter(event => event.channel === VOICE_IPC_CHANNELS.ANSWER_START).length, 1)
+        assert.equal(events.filter(event => event.channel === VOICE_IPC_CHANNELS.ANSWER_COMPLETE).length, 1)
+        assert.equal(events.filter(event => event.channel === VOICE_IPC_CHANNELS.ANSWER_CHUNK)
+          .map(event => (event.payload as VoiceAnswerChunkPayload).text).join(""), "SELECT * FROM users;")
+      } finally { controller.stop(); await audio.dispose() }
+    })
+  }
 }
 
 test("detectVoiceIntent matches specific and general assistance prompts", () => {
@@ -364,4 +431,28 @@ test("controller stop aborts active generation and suppresses later chunks", asy
       ),
     false
   )
+})
+
+test("stop during screenshot capture cleans late screen context and never starts an answer", async () => {
+  const events: SentEvent[] = []
+  let release!: (value: { screenshotBase64: string; cleanup: () => Promise<void> }) => void
+  let cleanups = 0
+  let answers = 0
+  const pending = new Promise<{ screenshotBase64: string; cleanup: () => Promise<void> }>(resolve => { release = resolve })
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+    hasApiKey: () => true,
+    captureScreenContext: () => pending,
+    streamVoiceAnswer: async () => { answers++ }
+  })
+  controller.start()
+  controller.handleTranscriptSegment({ ...createFinalSegment("SQL indexes"), submittedPrompt: true })
+  controller.stop()
+  release({ screenshotBase64: "late", cleanup: async () => { cleanups++ } })
+  await flushAsyncWork()
+  assert.equal(answers, 0)
+  assert.equal(cleanups, 1)
+  assert.equal(controller.getState().status, "idle")
+  assert.equal(events.some(event => event.channel === VOICE_IPC_CHANNELS.ANSWER_START), false)
 })

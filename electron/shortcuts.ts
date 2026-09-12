@@ -112,7 +112,7 @@ export class ShortcutsHelper {
     })
 
     globalShortcut.register("CommandOrControl+7", () => {
-      console.log("Command/Ctrl + 7 pressed. Submitting voice recording.")
+      console.log("Command/Ctrl + 7 pressed. Toggling Live microphone or submitting voice recording.")
       this.deps.submitVoiceRecording()
     })
 

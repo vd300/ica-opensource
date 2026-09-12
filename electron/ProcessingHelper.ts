@@ -6,7 +6,9 @@ import { IProcessingHelperDeps } from "./main"
 import * as axios from "axios"
 import { app, BrowserWindow, dialog } from "electron"
 import { OpenAI, toFile } from "openai"
-import { configHelper } from "./ConfigHelper"
+import { configHelper, type Config } from "./ConfigHelper"
+import type { VoiceFileUpload } from "../src/types/voiceAdapter"
+import { snapshotVoiceConfig } from "../src/types/voiceSettings"
 import Anthropic from '@anthropic-ai/sdk';
 import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages/messages"
 import type { VoiceIntent } from "../src/types/voice"
@@ -59,6 +61,12 @@ interface VoiceAnswerParams {
 type VoiceResponseStyle = "concise" | "code-first" | "detailed"
 
 export class ProcessingHelper {
+  private voiceRecordingConfig: Readonly<Config> | null = null
+
+  public captureVoiceRecordingConfig(): void {
+    this.voiceRecordingConfig = snapshotVoiceConfig(configHelper.loadConfig())
+  }
+
   private deps: IProcessingHelperDeps
   private screenshotHelper: ScreenshotHelper
   private openaiClient: OpenAI | null = null
@@ -1000,10 +1008,10 @@ Your solution should be efficient, well-commented, and handle edge cases. For SQ
       
       if (thoughtsMatch && thoughtsMatch[1]) {
         // Extract bullet points or numbered items
-        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*•]|\d+\.)\s*(.*)/g);
+        const bulletPoints = thoughtsMatch[1].match(/(?:^|\n)\s*(?:[-*\u2022]|\d+\.)\s*(.*)/g);
         if (bulletPoints) {
           thoughts = bulletPoints.map(point => 
-            point.replace(/^\s*(?:[-*•]|\d+\.)\s*/, '').trim()
+            point.replace(/^\s*(?:[-*\u2022]|\d+\.)\s*/, '').trim()
           ).filter(Boolean);
         } else {
           // If no bullet points found, split by newlines and filter empty lines
@@ -1215,8 +1223,10 @@ Your solution should be efficient, well-commented, and handle edge cases. For SQ
       );
 
       let fullText = "";
+      let voiceFinishReason: string | null = null;
       for await (const chunk of stream) {
         this.throwIfVoiceRequestAborted(params.signal);
+        voiceFinishReason = chunk.choices[0]?.finish_reason || voiceFinishReason;
         const text = chunk.choices[0]?.delta?.content;
         if (text) {
           fullText += text;
@@ -1224,6 +1234,10 @@ Your solution should be efficient, well-commented, and handle edge cases. For SQ
         }
       }
 
+      if (voiceFinishReason === "length") {
+        throw new Error("The voice answer reached the model output limit. Ask for a shorter answer or retry with another answer model.");
+      }
+      if (!fullText.trim()) throw new Error("The answer model returned no text. Please retry.");
       params.onComplete(fullText);
       return;
     }
@@ -1256,19 +1270,23 @@ Your solution should be efficient, well-commented, and handle edge cases. For SQ
     mimeType: string;
     language?: string;
   }): Promise<string> {
-    const config = configHelper.loadConfig();
+    const config = this.voiceRecordingConfig || snapshotVoiceConfig(configHelper.loadConfig());
+    return this.transcribeRecordingAudio(params, config, new AbortController().signal, true);
+  }
+
+  public async transcribeRecordingAudio(params: Pick<VoiceFileUpload, "audioBase64" | "mimeType">,
+    config: Readonly<Config>, signal: AbortSignal, legacyOnly = false): Promise<string> {
+    if (signal.aborted) throw new Error("Recording cancelled");
 
     if (config.apiProvider !== "openai") {
       throw new Error("Provider transcription fallback requires OpenAI in settings.");
     }
 
-    if (!this.openaiClient) {
-      this.initializeAIClient();
-    }
-
-    if (!this.openaiClient) {
+    if (!config.apiKey.trim()) {
       throw new Error("OpenAI API key not configured. Please check your settings.");
     }
+    // Use the trusted recording snapshot even if settings changed during capture.
+    const transcriptionClient = new OpenAI({ apiKey: config.apiKey, maxRetries: 0, timeout: 45000 });
 
     const audioBuffer = Buffer.from(params.audioBase64, "base64");
     if (audioBuffer.length === 0) {
@@ -1280,18 +1298,19 @@ Your solution should be efficient, well-commented, and handle edge cases. For SQ
       : params.mimeType.includes("ogg")
         ? "ogg"
         : "webm";
-    const language = params.language?.split("-")[0]?.trim() || undefined;
+    const language = config.voiceRecognitionLanguage?.split("-")[0]?.trim() || undefined;
     const file = await toFile(audioBuffer, `voice.${extension}`, {
       type: params.mimeType
     });
 
-    const transcription = await this.openaiClient.audio.transcriptions.create({
+    const transcription = await transcriptionClient.audio.transcriptions.create({
       file,
-      model: config.voiceTranscriptionModel || "gpt-4o-transcribe",
+      model: !legacyOnly && config.voiceAudioService === "whisper" ? "whisper-1" : config.voiceTranscriptionModel || "gpt-4o-transcribe",
       language,
       prompt:
         "Software engineering interview vocabulary: Kafka, message queues, event streaming, distributed systems, rate limiting, throttling, quotas, retries, exponential backoff, circuit breakers, Python, GIL, Global Interpreter Lock, Java, JavaScript, TypeScript, React, Node.js, backend, frontend, infrastructure, REST API, SQL, SQL query, database schema, table, column, row, join, aggregate, group by, having, CTE, window function, Postgres, MySQL, SQLite, Redis, Docker, Kubernetes, system design, algorithms, data structures, time complexity, space complexity, data migration, offloading data, uploading data, servers, production systems."
-    });
+    }, { signal, timeout: 45000 });
+    if (signal.aborted) throw new Error("Recording cancelled");
 
     return transcription.text?.trim() || "";
   }
@@ -1331,6 +1350,9 @@ Transcript: "${transcript}"
 
 Scope:
 - Answer software engineering interview questions across coding, backend, frontend, infrastructure, distributed systems, data systems, debugging, complexity, architecture, and system design.
+- AI engineering, LLM applications, agentic workflows, tool calling, RAG, and multi-agent systems are in scope. An agentic workflow uses an AI agent to choose steps, use tools, and evaluate results toward a goal; explain this directly with a practical example when asked.
+- A short topic fragment such as "Agentic work flow" means "What is an agentic workflow?" Normalize obvious word spacing mentally without inventing missing requirements.
+- Start with the answer itself. Avoid meta-commentary such as "It seems the prompt is asking", "not a standard software engineering term", or "Suggested Response". If a term is genuinely ambiguous, state a brief assumption and answer under that assumption.
 - Treat behavioral or experience questions as in scope when they involve engineering work, for example uploading, offloading, migrating, syncing, or serving data across servers or services.
 - Treat near-match speech recognition terms as technical vocabulary when context supports it, for example "JIL" or "GIM" in Python means "GIL".
 - When the transcript is ambiguous, answer it if it could plausibly be a technical interview question.
@@ -1743,9 +1765,9 @@ If you include code examples, use proper markdown code blocks with language spec
           .replace(/explanation|detailed analysis/i, '## Explanation');
       }
 
-      const bulletPoints = formattedDebugContent.match(/(?:^|\n)[ ]*(?:[-*•]|\d+\.)[ ]+([^\n]+)/g);
+      const bulletPoints = formattedDebugContent.match(/(?:^|\n)[ ]*(?:[-*\u2022]|\d+\.)[ ]+([^\n]+)/g);
       const thoughts = bulletPoints 
-        ? bulletPoints.map(point => point.replace(/^[ ]*(?:[-*•]|\d+\.)[ ]+/, '').trim()).slice(0, 5)
+        ? bulletPoints.map(point => point.replace(/^[ ]*(?:[-*\u2022]|\d+\.)[ ]+/, '').trim()).slice(0, 5)
         : ["Debug analysis based on your screenshots"];
       
       const response = {

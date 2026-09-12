@@ -19,3 +19,10 @@ export const VOICE_IPC_CHANNELS = {
 
 export type VoiceIpcChannel =
   (typeof VOICE_IPC_CHANNELS)[keyof typeof VOICE_IPC_CHANNELS]
+
+export const VOICE_AUDIO_IPC = {
+  CLAIM: "voice-audio-claim",
+  BEGIN: "voice-audio:begin", AUTHORIZE_FILE: "voice-audio:authorize-file",
+  UPLOAD: "voice-audio:upload", CREATE_LIVE: "voice-audio:create-live",
+  CANCEL: "voice-audio:cancel", COMPLETE: "voice-audio:complete"
+} as const

@@ -17,7 +17,9 @@ export type VoiceTranscriptionModel =
   | "gpt-4o-transcribe"
   | "gpt-4o-mini-transcribe"
 
-export interface AppConfig {
+import type { VoiceAudioSettings } from "./voiceAudio"
+
+export interface AppConfig extends VoiceAudioSettings {
   apiKey: string
   apiProvider: APIProvider
   extractionModel: string
@@ -32,7 +34,10 @@ export interface AppConfig {
   opacity: number
 }
 
+import type { VoiceAudioBridge } from "./voiceAdapter"
+
 export interface ElectronAPI {
+  voiceAudio: VoiceAudioBridge
   // Original methods
   openSubscriptionPortal: (authData: {
     id: string
@@ -91,6 +96,7 @@ export interface ElectronAPI {
   // New methods for OpenAI integration
   getConfig: () => Promise<AppConfig>
   updateConfig: (config: Partial<AppConfig>) => Promise<AppConfig>
+  onConfigUpdated: (callback: (config: Omit<AppConfig, "apiKey">) => void) => () => void
   checkApiKey: () => Promise<boolean>
   validateApiKey: (apiKey: string) => Promise<{ valid: boolean; error?: string }>
   openLink: (url: string) => void
