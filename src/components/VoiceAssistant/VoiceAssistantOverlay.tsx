@@ -247,7 +247,7 @@ export function VoiceAssistantOverlay() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-white/10 bg-zinc-950/95 text-white shadow-2xl backdrop-blur-md">
+    <div className="fixed left-1/2 top-2 z-50 w-[calc(100vw-1rem)] max-w-5xl -translate-x-1/2 overflow-hidden rounded-lg border border-white/10 bg-zinc-950/95 text-white shadow-2xl backdrop-blur-md">
       <div className="flex h-11 items-center justify-between border-b border-white/10 px-3">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10">
@@ -299,7 +299,7 @@ export function VoiceAssistantOverlay() {
         </button>
         {recognitionState.isMicrophoneMuted && recognitionState.isListening && <p role="status" className="pt-1 text-xs text-amber-200/80">Your speech is muted. The answer keeps streaming.</p>}
       </div>}
-      {recognitionState.isLive ? <LiveConversationView answers={recognitionState.liveWrittenAnswers} captions={recognitionState.liveCaptions} listening={recognitionState.isListening} muted={recognitionState.isMicrophoneMuted} error={recognitionState.error} /> : <div className="max-h-72 min-h-28 overflow-y-auto px-3 py-3">
+      {recognitionState.isLive ? <LiveConversationView answers={recognitionState.liveWrittenAnswers} captions={recognitionState.liveCaptions} listening={recognitionState.isListening} muted={recognitionState.isMicrophoneMuted} error={recognitionState.error} /> : <div className="max-h-56 min-h-24 overflow-y-auto px-4 py-3">
         {state.error ? (
           <div className="space-y-3">
             <div className="rounded-md border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-100">

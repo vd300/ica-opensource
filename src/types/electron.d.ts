@@ -31,6 +31,8 @@ export interface AppConfig extends VoiceAudioSettings {
   voiceTranscriptionModel: VoiceTranscriptionModel
   voiceTriggerConfidenceThreshold: number
   voiceResponseStyle: VoiceResponseStyle
+  resumeFileName: string
+  resumeText: string
   opacity: number
 }
 
@@ -96,6 +98,8 @@ export interface ElectronAPI {
   // New methods for OpenAI integration
   getConfig: () => Promise<AppConfig>
   updateConfig: (config: Partial<AppConfig>) => Promise<AppConfig>
+  selectResume: () => Promise<{ success: boolean; canceled?: boolean; fileName?: string; characterCount?: number; error?: string }>
+  clearResume: () => Promise<{ success: boolean; error?: string }>
   onConfigUpdated: (callback: (config: Omit<AppConfig, "apiKey">) => void) => () => void
   checkApiKey: () => Promise<boolean>
   validateApiKey: (apiKey: string) => Promise<{ valid: boolean; error?: string }>

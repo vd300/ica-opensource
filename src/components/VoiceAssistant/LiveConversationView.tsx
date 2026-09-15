@@ -80,7 +80,7 @@ export function LiveConversationView({ captions, answers, listening, muted, erro
       {answers.length > 0 && <button type="button" className="shrink-0 text-cyan-300" onClick={showAnswer}>{generating ? "Show generating answer" : "Show latest answer"}</button>}
     </div>
     <div ref={conversationScroll} hidden={view !== "conversation"} aria-label="Conversation" tabIndex={0}
-      className="max-h-72 min-h-28 overflow-y-auto px-3 py-3"
+      className="max-h-56 min-h-24 overflow-y-auto px-4 py-3"
       onWheel={pauseFollowing} onTouchMove={pauseFollowing} onPointerDown={pauseFollowing}
       onKeyDown={event => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) pauseFollowing() }}>
       {!captions.length && <p className="text-sm text-white/55">{listening ? muted ? "Microphone muted. Unmute when you are ready to speak." : "Listening. Ask a question to begin." : "Connecting to GPT-Live..."}</p>}
@@ -105,7 +105,7 @@ export function LiveConversationView({ captions, answers, listening, muted, erro
         onClick={() => setFocusAnswer(value => value + 1)}>Back to start</button>
     </div>}
     <div ref={writtenScroll} hidden={view !== "written"} aria-label="Written answers" tabIndex={0}
-      className="max-h-72 min-h-28 overflow-y-auto px-3 py-3" style={{ overflowAnchor: "none" }}
+      className="max-h-56 min-h-24 overflow-y-auto px-4 py-3" style={{ overflowAnchor: "none" }}
       onScroll={event => { if (selectedAnswerId) writtenPositions.current.set(selectedAnswerId, event.currentTarget.scrollTop) }}>
       {!answers.length && <p className="text-sm text-white/55">Ask for code or a written example. It will appear here without moving your conversation.</p>}
       {selectedAnswer && <WrittenAnswerView key={selectedAnswer.id} answer={selectedAnswer} />}

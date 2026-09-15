@@ -259,6 +259,8 @@ const electronAPI = {
   getConfig: () => ipcRenderer.invoke("get-config"),
   updateConfig: (config: Partial<AppConfig>) =>
     ipcRenderer.invoke("update-config", config),
+  selectResume: () => ipcRenderer.invoke("select-resume"),
+  clearResume: () => ipcRenderer.invoke("clear-resume"),
   onConfigUpdated: (callback: (config: Omit<AppConfig, "apiKey">) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, config: Omit<AppConfig, "apiKey">) => callback(config)
     ipcRenderer.on("config-updated", subscription)

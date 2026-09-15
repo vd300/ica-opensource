@@ -224,6 +224,9 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
     useState<VoiceTranscriptionModel>("gpt-4o-transcribe");
   const [voiceTriggerConfidenceThreshold, setVoiceTriggerConfidenceThreshold] = useState(0.3);
   const [voiceResponseStyle, setVoiceResponseStyle] = useState<VoiceResponseStyle>("concise");
+  const [resumeFileName, setResumeFileName] = useState("");
+  const [resumeCharacterCount, setResumeCharacterCount] = useState(0);
+  const [isResumeLoading, setIsResumeLoading] = useState(false);
   const [audioSettings, setAudioSettings] = useState<VoiceAudioSettings>({ ...DEFAULT_VOICE_AUDIO_SETTINGS });
   const audioRequirementError = voiceAudioRequirementError(audioSettings.voiceAudioService, apiProvider, apiKey);
   const [isLoading, setIsLoading] = useState(false);
@@ -261,6 +264,8 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         voiceTranscriptionModel?: VoiceTranscriptionModel;
         voiceTriggerConfidenceThreshold?: number;
         voiceResponseStyle?: VoiceResponseStyle;
+        resumeFileName?: string;
+        resumeText?: string;
       }
 
       window.electronAPI
@@ -284,6 +289,8 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
               : 0.3
           );
           setVoiceResponseStyle(config.voiceResponseStyle || "concise");
+          setResumeFileName(config.resumeFileName || "");
+          setResumeCharacterCount(config.resumeText?.length || 0);
         })
         .catch((error: unknown) => {
           console.error("Failed to load config:", error);
@@ -344,6 +351,31 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
       showToast("Error", "Failed to save settings", "error");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResumeUpload = async () => {
+    setIsResumeLoading(true);
+    try {
+      const result = await window.electronAPI.selectResume();
+      if (result.success) {
+        setResumeFileName(result.fileName || "Resume");
+        setResumeCharacterCount(result.characterCount || 0);
+        showToast("Resume ready", "It will be used when the next GPT-Live session starts.", "success");
+      } else if (!result.canceled) {
+        showToast("Resume import failed", result.error || "Unable to read the selected file.", "error");
+      }
+    } finally {
+      setIsResumeLoading(false);
+    }
+  };
+
+  const handleResumeClear = async () => {
+    const result = await window.electronAPI.clearResume();
+    if (result.success) {
+      setResumeFileName("");
+      setResumeCharacterCount(0);
+      showToast("Resume removed", "New GPT-Live sessions will no longer use resume context.", "success");
     }
   };
 
@@ -603,6 +635,23 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
                   onBlur={() => setAudioSettings(sanitizeVoiceAudioSettings(audioSettings))} />
                 <p className="text-xs text-white/50">Pause range: 500 to 5,000 ms; default: 1,500 ms. Changes apply to the next recording. Disabling voice mode stops recording immediately.</p>
                 <p className="text-xs text-white/50">GPT-Live is a continuous conversation: your speech and its responses appear live, with output audio muted. Ctrl+7 (Cmd+7 on Mac) toggles the microphone while answers keep streaming. Stop voice mode to end the session. It uses its own conversation and a gpt-5.6-luna reasoning backend, independent of Whisper and the file-answer pipeline.</p>
+                <div className="space-y-2 rounded-md border border-white/10 bg-white/[0.03] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-white/80">Interview resume context</div>
+                      <div className="truncate text-xs text-white/50">
+                        {resumeFileName ? `${resumeFileName} / ${resumeCharacterCount.toLocaleString()} characters` : "No resume uploaded"}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      {resumeFileName && <Button type="button" size="sm" variant="ghost" disabled={isResumeLoading} onClick={handleResumeClear}>Remove</Button>}
+                      <Button type="button" size="sm" variant="outline" disabled={isResumeLoading} onClick={handleResumeUpload}>
+                        {isResumeLoading ? "Reading..." : resumeFileName ? "Replace" : "Upload"}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-white/45">PDF, DOCX, TXT, or Markdown; up to 10 MB. The original file is sent to OpenAI for parsing and deleted from OpenAI after the request. Only the returned interview reference is stored locally. Changes apply to the next Live session.</p>
+                </div>
                 <p className="text-xs text-white/50">Submission and pause settings apply to Whisper and Current recognition only. Whisper uploads one complete recording when you submit; Automatic mode submits after detected speech and the configured pause. GPT-Live responds naturally without a submit shortcut or transcript review.</p>
                 {audioRequirementError && <p role="alert" className="text-xs text-amber-300">{audioRequirementError}</p>}
               </div>

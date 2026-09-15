@@ -4,6 +4,7 @@ import { ipcMain, shell, dialog } from "electron"
 import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
+import { parseResumeFile } from "./ResumeService"
 import { VOICE_IPC_CHANNELS } from "./voiceIpc"
 import type {
   VoiceIpcResult,
@@ -113,6 +114,38 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("update-config", (_event, updates) => {
     return configHelper.updateConfig(updates);
+  })
+
+  ipcMain.handle("select-resume", async () => {
+    const parent = deps.getMainWindow()
+    const result = parent
+      ? await dialog.showOpenDialog(parent, {
+          title: "Choose resume",
+          properties: ["openFile"],
+          filters: [{ name: "Resume", extensions: ["pdf", "docx", "txt", "md"] }]
+        })
+      : await dialog.showOpenDialog({
+          title: "Choose resume",
+          properties: ["openFile"],
+          filters: [{ name: "Resume", extensions: ["pdf", "docx", "txt", "md"] }]
+        })
+    if (result.canceled || !result.filePaths[0]) return { success: false, canceled: true }
+    try {
+      const config = configHelper.loadConfig()
+      if (config.apiProvider !== "openai") {
+        return { success: false, error: "Select OpenAI as the API provider before uploading a resume." }
+      }
+      const resume = await parseResumeFile(result.filePaths[0], config.apiKey)
+      configHelper.updateConfig({ resumeFileName: resume.fileName, resumeText: resume.text })
+      return { success: true, fileName: resume.fileName, characterCount: resume.characterCount }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Unable to read the resume." }
+    }
+  })
+
+  ipcMain.handle("clear-resume", () => {
+    configHelper.updateConfig({ resumeFileName: "", resumeText: "" })
+    return { success: true }
   })
 
   ipcMain.handle("check-api-key", () => {

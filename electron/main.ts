@@ -143,7 +143,7 @@ function initializeHelpers() {
   state.voiceAudioService = new VoiceAudioService({
     getConfig: () => configHelper.loadConfig(),
     transcribe: (payload, config, signal) => state.processingHelper!.transcribeRecordingAudio(payload, config, signal),
-    createLive: key => new LiveVoiceService(key),
+    createLive: key => new LiveVoiceService(key, configHelper.loadConfig().resumeText),
     submit: text => {
       const result = state.voiceAssistantController?.handleTranscriptSegment({ text, isFinal: true, confidence: 1, submittedPrompt: true, receivedAt: Date.now() })
       if (!result?.success) throw new Error(result?.error || "Voice controller unavailable")

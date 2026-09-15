@@ -20,6 +20,8 @@ export interface Config extends VoiceAudioSettings {
   voiceTranscriptionModel: "gpt-4o-transcribe" | "gpt-4o-mini-transcribe";
   voiceTriggerConfidenceThreshold: number;
   voiceResponseStyle: "concise" | "code-first" | "detailed";
+  resumeFileName?: string;
+  resumeText?: string;
   opacity: number;
 }
 
@@ -38,6 +40,8 @@ export class ConfigHelper extends EventEmitter {
     voiceTranscriptionModel: "gpt-4o-transcribe",
     voiceTriggerConfidenceThreshold: 0.3,
     voiceResponseStyle: "concise",
+    resumeFileName: "",
+    resumeText: "",
     opacity: 1.0
   };
 
@@ -160,6 +164,12 @@ export class ConfigHelper extends EventEmitter {
         if (!mergedConfig.voiceRecognitionLanguage) {
           mergedConfig.voiceRecognitionLanguage = "en-US";
         }
+        mergedConfig.resumeFileName = typeof mergedConfig.resumeFileName === "string"
+          ? mergedConfig.resumeFileName.slice(0, 255)
+          : "";
+        mergedConfig.resumeText = typeof mergedConfig.resumeText === "string"
+          ? mergedConfig.resumeText.slice(0, 50000)
+          : "";
         mergedConfig.voiceTranscriptionModel = this.sanitizeVoiceTranscriptionModel(
           mergedConfig.voiceTranscriptionModel
         );
@@ -254,6 +264,8 @@ export class ConfigHelper extends EventEmitter {
       }
       
       const newConfig = { ...currentConfig, ...updates };
+      newConfig.resumeFileName = typeof newConfig.resumeFileName === "string" ? newConfig.resumeFileName.slice(0, 255) : "";
+      newConfig.resumeText = typeof newConfig.resumeText === "string" ? newConfig.resumeText.slice(0, 50000) : "";
       Object.assign(newConfig, sanitizeVoiceAudioSettings(newConfig));
       this.saveConfig(newConfig);
       
@@ -269,7 +281,9 @@ export class ConfigHelper extends EventEmitter {
           Object.prototype.hasOwnProperty.call(updates, "voiceAutoSubmitSilenceMs") ||
           updates.voiceTranscriptionModel !== undefined ||
           updates.voiceTriggerConfidenceThreshold !== undefined ||
-          updates.voiceResponseStyle !== undefined) {
+          updates.voiceResponseStyle !== undefined ||
+          updates.resumeFileName !== undefined ||
+          updates.resumeText !== undefined) {
         this.emit('config-updated', newConfig);
       }
       

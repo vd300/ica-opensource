@@ -80,11 +80,38 @@ test("Live uses the fixed HTTP contract and opaque session IDs; authorization ne
   assert.equal(calls[0][1].session.delegation.type, "responses")
   assert.equal(calls[0][1].session.delegation.responses.model, "gpt-5.6-luna")
   assert.equal(typeof calls[0][1].session.delegation.responses.instructions, "string")
+  assert.match(calls[0][1].session.instructions, /how would you design/i)
+  assert.match(calls[0][1].session.instructions, /required diagram and flow explanation/i)
+  assert.match(calls[0][1].session.instructions, /non-native English speaker/i)
+  assert.match(calls[0][1].session.instructions, /concrete example/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /fenced Mermaid block/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /end-to-end flow step by step/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /Avoid generic buzzwords/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /concrete example tied to the user's question/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /exact same name in the explanation/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /Explain every module shown in the diagram and every arrow/i)
+  assert.match(calls[0][1].session.delegation.responses.instructions, /direction of data are identical in both places/i)
   assert.equal(calls[0][1].session.delegation.responses.tools, undefined)
   assert.equal(calls[0][2].maxRedirects, 0)
   assert.equal(JSON.stringify(result).includes("secret"), false)
   await service.hangup(result.session.id)
   assert.equal(calls[1][0], "https://api.openai.com/v1/live/sessions/live%2Fopaque-prefix/hangup")
+})
+
+test("Live gives resume facts to both conversation and written-answer models", async context => {
+  const calls: any[][] = []
+  context.mock.method(axios, "post", async (...args: any[]) => {
+    calls.push(args)
+    return { status: 201, data: { session: { id: "resume-session" }, transport: { type: "webrtc", sdp: "v=0\r\n" } } }
+  })
+  await new LiveVoiceService("test-secret", "Recent Project: Agent platform using Python and LangGraph").create("v=0\r\n")
+  const session = calls[0][1].session
+  for (const instructions of [session.instructions, session.delegation.responses.instructions]) {
+    assert.match(instructions, /Recent Project: Agent platform/)
+    assert.match(instructions, /first person/)
+    assert.match(instructions, /do not invent/i)
+    assert.match(instructions, /untrusted data/i)
+  }
 })
 
 test("Live rejects bad SDP and sanitizes network errors", async context => {
