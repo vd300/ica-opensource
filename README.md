@@ -1,258 +1,147 @@
-# Interview Coder (ICA)
+# Interview Coder - Unlocked Edition
 
-Interview Coder is an open-source Electron desktop assistant for practicing coding and software-engineering interviews. It turns screenshots into structured solutions, analyzes follow-up screenshots, and answers spoken technical questions through a compact desktop overlay.
+An open-source desktop copilot for technical-interview practice. Capture a problem from your screen, turn it into a structured prompt, generate an implementation in your preferred language, and ask for debugging help without leaving the workflow.
 
-ICA is a bring-your-own-key application. It has no hosted ICA account or subscription service; requests go directly from the desktop app to the AI provider selected in Settings.
+Interview Coder is built for people who want a transparent, self-hosted alternative to subscription interview assistants: there is no account, subscription, or application paywall. You bring your own provider API key and choose the models you want to use, so the source, configuration, and usage costs remain under your control. Provider API charges may still apply.
 
-> Use ICA for practice, accessibility, or sessions where external assistance is explicitly permitted. It does not bypass interview rules, operating-system permissions, screen-sharing controls, or proctoring software.
+> Use Interview Coder responsibly. Only use screen capture, microphone, or AI assistance where the interviewer, employer, classroom, platform, and local rules allow it. The privacy features described below are interface conveniences, not a promise that the app is undetectable.
 
 ## Features
 
-### Screenshot workflow
+### Screenshot-to-solution workflow
 
-- Capture up to five problem screenshots with a global shortcut.
-- Extract problem statements, constraints, examples, and design context.
-- Generate code, explanations, complexity analysis, edge cases, and architecture guidance.
-- Select separate models for extraction, solution generation, and debugging.
-- Submit follow-up screenshots of code, errors, or test output for debugging.
-- Render Mermaid diagrams returned with design answers.
-- Generate answers in Python, JavaScript, Java, Go, C++, Swift, Kotlin, Ruby, SQL, R, or C#.
+- Capture up to five problem screenshots with a global shortcut or the app controls.
+- Preview, queue, and remove screenshots before sending them for analysis.
+- Extract the problem statement, constraints, examples, and other relevant details from images.
+- Generate an optimized solution with reasoning plus time- and space-complexity analysis.
+- Add screenshots of code, failures, or test results after a solution to receive focused debugging and improvement advice.
+- First-class guidance for algorithms, SQL/database questions, backend and frontend topics, infrastructure, distributed systems, and system design.
+- System-design answers can include compact HLD, LLD, and data-flow diagrams in portable ASCII text.
 
-### Voice workflow
+### Multiple AI providers and models
 
-Voice Assistant supports three audio services:
+- Connect directly to OpenAI, Google Gemini, or Anthropic with your own API key.
+- Select separate models for problem extraction, solution generation, and debugging.
+- Keep provider, model, language, opacity, and voice preferences in local application settings.
+- Switch the output language among Python, JavaScript, Java, Go, C++, Swift, Kotlin, Ruby, SQL, R, and C#.
 
-| Service | Behavior | Submission |
-| --- | --- | --- |
-| Current recognition | Uses runtime/browser recognition first, with an OpenAI file-transcription fallback when available | Manual shortcut or automatic pause |
-| Whisper API | Records an in-memory audio file and sends the completed recording to OpenAI `whisper-1` | Manual shortcut or automatic pause |
-| GPT-Live | Streams microphone audio over WebRTC and displays user and assistant captions in a continuous conversation | Shortcut toggles microphone mute |
+This provider flexibility is a quiet advantage over many hosted paid tools: you are not locked into one model, one pricing tier, or a recurring app subscription.
 
-Current recognition and Whisper can capture a temporary screenshot for context and stream a written answer through the configured provider. GPT-Live does not use the screenshot or file-answer pipeline. It can delegate technical reasoning and code requests to a fixed reasoning model and show the result in a separate Written answers panel. Provider audio output is intentionally not connected to playback.
+### Voice interview assistant
 
-Voice settings include recognition language, manual or automatic submission, a 500–5,000 ms automatic pause, two OpenAI transcription models, and concise, code-first, or detailed answer styles.
+- Start voice mode globally with `Ctrl+I` on Windows/Linux or `Cmd+I` on macOS.
+- Choose browser/current recognition, Whisper transcription, or a continuous GPT-Live conversation.
+- Use manual submission or automatic submission after a configurable pause where supported.
+- Tune recognition language, trigger confidence, pause duration, and answer style (`Concise`, `Code First`, or `Detailed`).
+- Read streaming transcripts and written answers while GPT-Live audio output remains muted.
+- Toggle the GPT-Live microphone, or submit a recorded question in other modes, with `Ctrl+7` / `Cmd+7`.
+- Supply optional resume context from PDF, DOCX, TXT, or Markdown and add factual clarifications for experience questions.
+- Import a local snapshot of public GitHub profile and repository metadata to ground project discussions without inventing contributions.
 
-Whisper API and GPT-Live require OpenAI to be selected with a valid OpenAI API key. GPT-Live currently uses `gpt-live-1` and delegates reasoning to `gpt-5.6-luna`, so the account must have access to both.
+Voice capabilities depend on the selected provider and platform. Resume files are parsed through OpenAI; the original remote file is deleted after parsing, while the returned reference is stored locally.
 
-## Requirements
+### A deliberately low-profile desktop experience
 
-- Node.js 22 or newer and npm.
-- Windows, macOS, or Linux with an Electron-compatible desktop session.
-- An API key for OpenAI, Google Gemini, or Anthropic.
-- Internet access for provider requests.
-- Screen-capture permission for screenshot features.
-- Microphone permission for voice features.
+The app is designed to stay out of the way while you work:
 
-Windows is the primary target of the current voice QA workflow. Automated tests exercise platform-independent logic, but physical microphone behavior and current macOS/Linux shortcut behavior still require manual acceptance testing.
+- A frameless, transparent, always-on-top panel avoids a conventional desktop window footprint.
+- It is omitted from the taskbar and can appear across workspaces, including full-screen spaces where the operating system supports it.
+- One shortcut instantly makes the panel transparent and click-through; the same shortcut restores it without taking focus.
+- Opacity can be adjusted from nearly invisible to fully readable.
+- Global arrow shortcuts move the panel without dragging it.
+- Content protection is requested from Electron to exclude the panel from many screen-capture paths.
+- The app briefly hides its own panel during its screenshot flow so it does not obscure the problem being captured.
+- Dedicated Windows and macOS stealth launch scripts build and start the application in the background.
 
-## Install and run
+These measures make the interface discreet and reduce interruption, but behavior varies by OS, desktop environment, conferencing software, and capture method. No desktop application can guarantee invisibility in every environment.
+
+### Desktop quality-of-life features
+
+- Keyboard-first controls available even when the panel is not focused.
+- Adjustable zoom and opacity.
+- Persisted window and application preferences.
+- Reset/cancel control for clearing queues and returning to a clean state.
+- Update notifications and packaged targets for Windows, macOS, and Linux.
+- Local-first configuration with no required app login or hosted subscription service.
+
+## Keyboard shortcuts
+
+Use `Ctrl` on Windows/Linux and `Cmd` on macOS.
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd + B` | Toggle panel visibility |
+| `Ctrl/Cmd + H` | Capture a screenshot |
+| `Ctrl/Cmd + Enter` | Process queued screenshots |
+| `Ctrl/Cmd + L` | Delete the most recent screenshot |
+| `Ctrl/Cmd + I` | Start voice mode |
+| `Ctrl/Cmd + 7` | Submit voice recording or toggle the GPT-Live microphone |
+| `Ctrl/Cmd + Arrow keys` | Move the panel |
+| `Ctrl/Cmd + [` / `]` | Decrease / increase opacity |
+| `Ctrl/Cmd + -` / `0` / `=` | Zoom out / reset / zoom in |
+| `Ctrl/Cmd + R` | Cancel active work, clear queues, and reset the view |
+| `Ctrl/Cmd + Q` | Quit |
+
+## Getting started
+
+### Prerequisites
+
+- Node.js and npm
+- An API key for the provider you plan to use
+- Screen-recording and microphone permission when using the corresponding features
+
+### Run in development
 
 ```bash
-git clone https://github.com/vd300/ica-opensource.git
-cd ica-opensource
-npm ci
+git clone <your-fork-or-repository-url>
+cd interview-coder-withoupaywall-opensource
+npm install
 npm run dev
 ```
 
-The development renderer uses port `54321`, and development mode opens Electron DevTools automatically.
+Open **Settings**, select a provider, enter its API key, choose models for each stage, and select your preferred programming language. Then capture a problem with `Ctrl/Cmd + H` and process it with `Ctrl/Cmd + Enter`.
 
-To run a production build locally:
+### Build and run locally
 
 ```bash
 npm run build
 npm run run-prod
 ```
 
-## First-time setup
+Or use the platform helper:
 
-1. Open Settings in the application.
-2. Select OpenAI, Gemini, or Anthropic.
-3. Enter the matching provider API key.
-4. Choose the extraction, solution, and debugging models.
-5. Select the output programming language.
-6. Configure Voice Assistant and its audio service if needed.
-7. Save the settings.
-
-The app stores one active provider/key configuration. Switching providers may reset the three task models to that provider's defaults.
-
-## Using screenshots
-
-1. Display a practice problem and press `Ctrl/Cmd+H` to capture it.
-2. Repeat for additional context. The queue retains up to five screenshots.
-3. Press `Ctrl/Cmd+Enter` to extract and solve the problem.
-4. In the solution view, capture code, errors, or failed output and submit them for debugging.
-5. Press `Ctrl/Cmd+R` to clear the problem and begin again.
-
-## Using Voice Assistant
-
-Enable Voice Assistant in Settings before starting.
-
-### Current recognition or Whisper API
-
-1. Press `Ctrl/Cmd+I` to begin recording.
-2. Ask a software-engineering question.
-3. In Manual mode, press `Ctrl/Cmd+7` to submit. In Automatic mode, sustained speech followed by the configured pause submits once.
-4. Read the transcript and streamed answer in the overlay.
-5. Start another recording for another question, or use Stop to end the session.
-
-Silence alone does not submit. File/browser capture is limited to two minutes, uploaded audio to 20 MiB, and file transcription to a 45-second main-process deadline.
-
-### GPT-Live
-
-1. Select GPT-Live with the OpenAI provider and start it with `Ctrl/Cmd+I`.
-2. Speak naturally and follow the user/assistant captions.
-3. Press `Ctrl/Cmd+7` to mute or unmute the microphone without ending the conversation.
-4. Ask for code or say “write it down” to place formatted output in Written answers.
-5. Use Stop to close the session. Starting again creates a new conversation.
-
-Manual/Automatic submission and pause duration do not apply to GPT-Live. A disconnect does not fall back to Whisper; start a new session after correcting the reported error.
-
-## Keyboard shortcuts
-
-Electron registers these as global `CommandOrControl` shortcuts while ICA runs:
-
-| Action | Shortcut |
-| --- | --- |
-| Capture screenshot | `Ctrl/Cmd+H` |
-| Process screenshot queue | `Ctrl/Cmd+Enter` |
-| Delete latest screenshot | `Ctrl/Cmd+L` |
-| Reset current problem | `Ctrl/Cmd+R` |
-| Show or hide overlay | `Ctrl/Cmd+B` |
-| Start Voice Assistant | `Ctrl/Cmd+I` |
-| Submit recording or toggle GPT-Live microphone | `Ctrl/Cmd+7` |
-| Move overlay | `Ctrl/Cmd+Arrow keys` |
-| Decrease/increase opacity | `Ctrl/Cmd+[` / `Ctrl/Cmd+]` |
-| Zoom out/in | `Ctrl/Cmd+-` / `Ctrl/Cmd+=` |
-| Reset zoom | `Ctrl/Cmd+0` |
-| Quit | `Ctrl/Cmd+Q` |
-
-Other applications or operating-system shortcuts can prevent registration. Electron does not reliably distinguish the physical left and right Control keys.
-
-## Providers and models
-
-These are the model IDs currently accepted by the application. Availability and billing depend on the provider and account.
-
-| Provider | Screenshot, solution, and debugging models | Voice notes |
-| --- | --- | --- |
-| OpenAI | `gpt-5-nano`, `gpt-4o`, `gpt-4o-mini` | Supports file-transcription fallback, Whisper API, and GPT-Live |
-| Google Gemini | `gemini-1.5-pro`, `gemini-2.0-flash` | Supports the file-answer route, not OpenAI transcription services |
-| Anthropic | `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229` | Supports the file-answer route, not OpenAI transcription services |
-
-The configuration layer also accepts `gpt-5-nano-2025-08-07`, although Settings exposes `gpt-5-nano`. Current recognition's OpenAI fallback supports `gpt-4o-transcribe` and `gpt-4o-mini-transcribe`.
-
-OpenAI key testing performs an API request. Gemini and Anthropic checks currently validate only the key's shape; successful validation does not prove model access.
-
-## Privacy and data flow
-
-ICA is locally operated, but it is not an offline AI application.
-
-- Settings and the API key are stored as plain JSON in Electron's user-data directory, not an operating-system credential vault.
-- Queue screenshots are stored locally and sent to the selected provider when processed.
-- Voice screen context uses a separate temporary screenshot and cleans it after the request.
-- File-mode microphone audio is held in memory and sent for transcription; ICA does not intentionally save raw recordings to disk.
-- GPT-Live streams microphone audio to OpenAI over WebRTC.
-- Prompts, transcripts, images, context, and responses are subject to the selected provider's terms and data policies.
-- Mermaid rendering loads browser code from jsDelivr when a diagram is displayed.
-
-The launch log prints `Config path:` with the effective settings location. Never commit that file, API keys, captured content, or unredacted logs.
-
-## Overlay and screen capture
-
-The Electron window is frameless, transparent, always on top, hidden from the taskbar where supported, and created with Electron content protection enabled. These settings depend on the operating system and capture method.
-
-Content protection does not promise that the overlay will be absent from every screenshot, recording, browser share, full-display share, remote-desktop session, or conferencing product. ICA does not detect which platform is recording it and provides no compatibility or “invisibility” guarantee.
-
-For legitimate compatibility testing, use non-sensitive sample content and test each mode independently:
-
-1. Record the full display with a local recorder.
-2. Record or share only the window containing a sample prompt.
-3. Test browser-tab, window, and full-screen sharing in a private meeting with informed participants.
-4. Verify every monitor in a multi-display setup.
-5. Repeat after Electron, OS, graphics-driver, or conferencing-app updates.
-6. Record the OS, versions, capture mode, and result instead of generalizing from one test.
-
-Only perform these checks in environments you control. Do not use capture behavior to conceal unauthorized assistance.
-
-## Development commands
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Clean output, watch Electron TypeScript, run Vite, and launch Electron |
-| `npm start` | Compile Electron once, run Vite, and launch Electron |
-| `npm test` | Compile Electron and run the Node test suite |
-| `npm run lint` | Run ESLint |
-| `npm run build` | Build the renderer and compile Electron for production |
-| `npm run run-prod` | Launch the existing production build |
-| `npm run clean` | Remove `dist/` and `dist-electron/` |
-| `npm run probe:live:access` | Run the command-line GPT-Live access probe |
-| `npm run probe:live` | Launch the Electron GPT-Live prototype |
-| `npm run qa:voice:package` | Create an unpacked Windows x64 voice-QA build |
-
-Before submitting code:
+```powershell
+.\stealth-run.bat
+```
 
 ```bash
-npm test
-npm run lint
-npm run build
+chmod +x stealth-run.sh
+./stealth-run.sh
 ```
 
-The automated suite covers voice state, settings migration, speech activity, submission races, provider routing, audio validation, cancellation, Live captions, managed delegation, and written-answer streaming. It does not certify real microphones, provider latency, API entitlements, installer behavior, or capture compatibility.
+To create distributable packages, use `npm run package`, `npm run package-win`, or `npm run package-mac` as appropriate.
 
-## Packaging
+## Why this edition
 
-```bash
-npm run package       # platform/default target
-npm run package-win   # Windows NSIS
-npm run package-mac   # macOS DMG and ZIP, x64 and arm64
-```
+Interview Coder focuses on ownership rather than a service tier. Comparable commercial tools often bundle the interface, model choice, and usage into a recurring plan. This edition keeps the application free and auditable, lets you select among supported providers, stores configuration locally, and leaves AI spend with the provider account you control. That can be simpler and more economical for occasional practice, while still offering screenshot analysis, debugging, voice interaction, and contextual interview support in one desktop app.
 
-Artifacts go to `release/`; Linux's configured target is AppImage.
+The trade-off is equally clear: you set up and maintain the app yourself, supply API access, and pay any provider usage charges directly.
 
-The standard configuration contains inherited app identifiers, GitHub publishing metadata, an `.env` extra-resource entry, and macOS signing/notarization settings. Review them before distributing a fork. The `qa:voice:package` build omits publishing and `.env` resources and produces `release/voice-qa/win-unpacked/Interview Coder.exe`.
+## Privacy and data notes
 
-## Project structure
+- API keys and preferences are stored locally through the Electron application configuration.
+- Screenshots, audio, prompts, resume content, and related context are sent to the selected service when a feature requires processing.
+- Public GitHub metadata can be imported and retained as a local snapshot for GPT-Live context.
+- Review your provider's retention policy and your organization's rules before sending confidential material.
 
-```text
-electron/                         Electron main process and provider integrations
-  ConfigHelper.ts                 Local settings, defaults, and validation
-  ProcessingHelper.ts             Screenshot and file-answer provider routes
-  ScreenshotHelper.ts             Queues and temporary screen context
-  VoiceAssistantController.ts     Voice session and answer orchestration
-  VoiceAudioService.ts            Audio lifecycle and validation
-  LiveVoiceService.ts             Fixed GPT-Live session boundary
-  tests/                           Node regression tests
-  prototypes/live/                 GPT-Live probes
-src/                              React renderer
-  _pages/                          Queue, solution, and debugging screens
-  components/Settings/             Provider, model, and voice controls
-  components/VoiceAssistant/       Audio adapters, captions, and written answers
-docs/gpt-live-integration/         Live implementation and QA records
-docs/voice-interview-feature/      Original voice design notes
-assets/                           Packaging icons
-build/                            Packaging resources and macOS entitlements
-```
+## Credits
 
-## Troubleshooting
-
-| Problem | Check |
-| --- | --- |
-| Overlay is missing | Press `Ctrl/Cmd+B`, increase opacity, and confirm Electron is running |
-| Development launch times out | Confirm port `54321` is free and no stale dev process remains |
-| Screenshot capture fails | Grant screen-recording permission and restart ICA |
-| Global shortcut does nothing | Check for conflicts with the OS or another application |
-| Provider request fails | Verify provider, key, quota, network access, and model entitlement |
-| Voice cannot start | Enable desktop microphone access and select a compatible provider/service |
-| Whisper or GPT-Live is incompatible | Select OpenAI and save a valid OpenAI API key |
-| Automatic submission is early | Increase Automatic Pause or switch to Manual |
-| GPT-Live disconnects | Start a fresh session; it does not fall back to another service |
-| Production behavior is stale | Run `npm run build`; packaged executables are not updated by a source build |
+This edition is built upon the open-source work in [j4wg/interview-coder-withoupaywall-opensource](https://github.com/j4wg/interview-coder-withoupaywall-opensource). Many thanks to that project's author and contributors for the foundation this repository extends.
 
 ## Contributing
 
-Issues and pull requests are welcome. Include reproducible steps, operating system, application version, selected provider/model, and redacted logs. For microphone or capture issues, also state the device, permissions, display setup, and exact capture mode.
-
-Keep changes focused and do not commit credentials or generated build output.
+Bug fixes, documentation improvements, platform testing, and focused features are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
 
 ## License
 
-ICA is licensed under the GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`). See [LICENSE](LICENSE) and preserve required notices when modifying or redistributing the project.
+Licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). See [LICENSE-SHORT](LICENSE-SHORT) for the repository's summary and additional terms.
