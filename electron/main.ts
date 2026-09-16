@@ -151,6 +151,7 @@ function initializeHelpers() {
       const result = state.voiceAssistantController?.handleTranscriptSegment({ text, isFinal: true, confidence: 1, submittedPrompt: true, receivedAt: Date.now() })
       if (!result?.success) throw new Error(result?.error || "Voice controller unavailable")
     },
+    submissionClaimed: () => state.voiceAssistantController?.prepareSubmissionContext(),
     expired: () => {
       state.voiceAssistantController?.stop()
       state.voiceAssistantController?.handleRecognitionError({ code: "speech_unavailable", message: "Voice recording expired. Start a new recording.", recoverable: true })
@@ -173,7 +174,10 @@ function initializeHelpers() {
       state.voiceAudioService?.cancelAll()
       state.processingHelper?.captureVoiceRecordingConfig()
     },
-    onRecordingStop: () => state.voiceAudioService?.cancelAll(),
+    onRecordingStop: () => {
+      state.voiceAudioService?.cancelAll()
+      state.processingHelper?.clearWhisperConversation()
+    },
     hasApiKey: () => configHelper.hasApiKey(),
     captureScreenContext,
     streamVoiceAnswer: (params) => {

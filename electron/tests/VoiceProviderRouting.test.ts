@@ -8,12 +8,14 @@ import { DEFAULT_VOICE_AUDIO_SETTINGS } from "../../src/types/voiceSettings"
 const requests: any[] = []
 const clients: any[] = []
 const handlers = new Map<string, (...args: any[]) => any>()
+let mockedConfig: any = { apiProvider: "openai", apiKey: "test-secret", solutionModel: "gpt-4o",
+  voiceResponseStyle: "concise", ...DEFAULT_VOICE_AUDIO_SETTINGS }
 const nodeModule = Module as unknown as { _load: (...args: any[]) => any }
 const originalLoad = nodeModule._load
 nodeModule._load = function (id: string, ...args: any[]) {
   if (id === "electron") return { ipcMain: { handle: (channel: string, fn: (...args: any[]) => any) => handlers.set(channel, fn) } }
   if (id === "./ScreenshotHelper") return {}
-  if (id === "./ConfigHelper") return { configHelper: { loadConfig: () => ({ apiProvider: "openai", solutionModel: "gpt-4o", voiceResponseStyle: "concise" }) } }
+  if (id === "./ConfigHelper") return { configHelper: { loadConfig: () => ({ ...mockedConfig }) } }
   if (id === "openai") return {
     OpenAI: class {
       constructor(options: unknown) { clients.push(options) }
@@ -64,6 +66,79 @@ test("Whisper model is explicit; compatibility models, language hints and AbortS
   }
   controller.abort()
   await assert.rejects(helper.transcribeRecordingAudio({ audioBase64: "YWJj", mimeType: "audio/webm" }, {} as any, controller.signal), /cancelled/)
+})
+
+test("Whisper answers receive frozen resume, additional and GitHub context without changing other voice routes", async () => {
+  const answerRequests: any[] = []
+  const makeHelper = () => {
+    const helper = Object.create(ProcessingHelper.prototype) as any
+    helper.whisperConversation = []
+    helper.getLanguage = async () => "typescript"
+    helper.openaiClient = { chat: { completions: { create: async (request: any) => {
+      answerRequests.push(request)
+      return (async function* () {
+        yield { choices: [{ delta: { content: "answer" }, finish_reason: "stop" }] }
+      })()
+    } } } }
+    return helper
+  }
+  const answer = async (helper: any) => helper.streamVoiceAnswer({ intent: "explain", transcript: "describe my project",
+    signal: new AbortController().signal, onChunk: () => {}, onComplete: () => {} })
+
+  mockedConfig = { ...mockedConfig, voiceAudioService: "whisper", resumeText: "Built a Python event platform",
+    resumeExtraContext: "I owned the API migration", githubProjectsContext: "event-platform repository" }
+  const whisper = makeHelper()
+  whisper.captureVoiceRecordingConfig()
+  mockedConfig = { ...mockedConfig, resumeText: "changed after recording", resumeExtraContext: "changed",
+    githubProjectsContext: "changed" }
+  await answer(whisper)
+  const whisperSystem = answerRequests.at(-1).messages[0].content
+  assert.match(whisperSystem, /Built a Python event platform/)
+  assert.match(whisperSystem, /I owned the API migration/)
+  assert.match(whisperSystem, /event-platform repository/)
+  assert.doesNotMatch(whisperSystem, /changed after recording/)
+  assert.match(whisperSystem, /untrusted data/i)
+  assert.match(whisperSystem, /does not prove the candidate's role/i)
+  assert.match(whisperSystem, /Never claim the candidate knows, built, used, led/i)
+
+  mockedConfig = { ...mockedConfig, voiceAudioService: "legacy", resumeText: "legacy must not receive this",
+    resumeExtraContext: "legacy extra", githubProjectsContext: "legacy repository" }
+  const legacy = makeHelper()
+  legacy.captureVoiceRecordingConfig()
+  await answer(legacy)
+  const legacySystem = answerRequests.at(-1).messages[0].content
+  assert.doesNotMatch(legacySystem, /legacy must not receive this|legacy extra|legacy repository/)
+})
+
+test("Whisper follow-ups include recent completed turns and explicit reset clears them", async () => {
+  const answerRequests: any[] = []
+  const helper = Object.create(ProcessingHelper.prototype) as any
+  helper.whisperConversation = []
+  helper.getLanguage = async () => "typescript"
+  helper.openaiClient = { chat: { completions: { create: async (request: any) => {
+    answerRequests.push(request)
+    const answerText = answerRequests.length === 1 ? "Redis stores hot values in memory." : "Use a TTL for expiry."
+    return (async function* () {
+      yield { choices: [{ delta: { content: answerText }, finish_reason: "stop" }] }
+    })()
+  } } } }
+  mockedConfig = { ...mockedConfig, voiceAudioService: "whisper", resumeText: "", resumeExtraContext: "",
+    githubProjectsContext: "" }
+  helper.captureVoiceRecordingConfig()
+  const ask = (transcript: string) => helper.streamVoiceAnswer({ intent: "explain", transcript,
+    signal: new AbortController().signal, onChunk: () => {}, onComplete: () => {} })
+
+  await ask("What is Redis caching?")
+  await ask("How do I expire those values?")
+  const followUpMessages = answerRequests[1].messages
+  assert.deepEqual(followUpMessages.slice(1, 3), [
+    { role: "user", content: "What is Redis caching?" },
+    { role: "assistant", content: "Redis stores hot values in memory." }
+  ])
+
+  helper.clearWhisperConversation()
+  await ask("What were we discussing?")
+  assert.equal(answerRequests[2].messages.length, 2)
 })
 
 test("Live uses the fixed HTTP contract and opaque session IDs; authorization never crosses the response", async context => {

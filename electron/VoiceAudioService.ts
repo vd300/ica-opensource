@@ -25,6 +25,7 @@ export interface VoiceAudioServiceDeps {
   transcribe(payload: VoiceFileUpload, config: Readonly<Config>, signal: AbortSignal): Promise<string>
   createLive(apiKey: string): LiveTransport
   submit(text: string): void
+  submissionClaimed?(config: Readonly<Config>): void
   expired?(): void
 }
 
@@ -64,6 +65,7 @@ export class VoiceAudioService {
     if (payload.reason === "silence" && record.config.voiceSubmissionMode !== "automatic") return false
     if (record.turnId || !["ready", "file", "live"].includes(record.state)) return false
     record.turnId = randomUUID()
+    if (record.config.voiceAudioService === "whisper") this.deps.submissionClaimed?.(record.config)
     return true
   }
 

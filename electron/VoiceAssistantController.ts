@@ -212,6 +212,10 @@ export class VoiceAssistantController {
   private readonly deps: VoiceAssistantControllerDeps
   private readonly debounceMs: number
   private readonly now: () => number
+  private pendingScreenContext?: {
+    abortController: AbortController
+    promise: Promise<VoiceScreenContext>
+  }
 
   private state: VoiceSessionState = {
     enabled: false,
@@ -248,7 +252,26 @@ export class VoiceAssistantController {
     return { success: true }
   }
 
+  /**
+   * Start the relatively slow screen capture as soon as a file submission is
+   * accepted. Whisper can transcribe in parallel, so answer generation no
+   * longer waits for both network transcription and the capture delay.
+   */
+  public prepareSubmissionContext(): void {
+    if (!this.state.enabled || this.state.activeAbortController ||
+        this.pendingScreenContext || !this.deps.captureScreenContext) return
+    const abortController = new AbortController()
+    const promise = Promise.resolve().then(() =>
+      this.deps.captureScreenContext!(abortController.signal)
+    )
+    // The result is consumed by triggerIntent. Attach a handler now so a
+    // provider/transcription failure cannot leave a rejected promise unhandled.
+    void promise.catch(() => {})
+    this.pendingScreenContext = { abortController, promise }
+  }
+
   public start(): VoiceIpcResult {
+    this.discardPendingScreenContext()
     if (!this.getVoiceSettings().enabled) {
       const error = {
         code: "unknown" as const,
@@ -297,6 +320,7 @@ export class VoiceAssistantController {
   }
 
   public stop(): VoiceIpcResult {
+    this.discardPendingScreenContext()
     this.deps.onRecordingStop?.()
     const hadActiveRequest = Boolean(this.state.activeAbortController)
     const requestId = this.state.requestId
@@ -376,6 +400,7 @@ export class VoiceAssistantController {
   public handleRecognitionError(
     error: VoiceRecognitionErrorPayload
   ): VoiceIpcResult {
+    this.discardPendingScreenContext()
     this.abortActiveRequest()
     this.state = {
       ...this.state,
@@ -443,7 +468,17 @@ export class VoiceAssistantController {
     let screenContext: VoiceScreenContext | undefined
 
     try {
-      if (this.deps.captureScreenContext) {
+      const prepared = this.pendingScreenContext
+      this.pendingScreenContext = undefined
+      if (prepared) {
+        const cancelPrepared = () => prepared.abortController.abort()
+        abortController.signal.addEventListener("abort", cancelPrepared, { once: true })
+        try {
+          screenContext = await prepared.promise
+        } finally {
+          abortController.signal.removeEventListener("abort", cancelPrepared)
+        }
+      } else if (this.deps.captureScreenContext) {
         screenContext = await this.deps.captureScreenContext(
           abortController.signal
         )
@@ -526,6 +561,14 @@ export class VoiceAssistantController {
       this.state.activeAbortController.abort()
       this.state.activeAbortController = null
     }
+  }
+
+  private discardPendingScreenContext(): void {
+    const pending = this.pendingScreenContext
+    this.pendingScreenContext = undefined
+    if (!pending) return
+    pending.abortController.abort()
+    void pending.promise.then(context => context.cleanup?.()).catch(() => {})
   }
 
   private throwIfAborted(signal: AbortSignal): void {

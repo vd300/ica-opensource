@@ -456,3 +456,32 @@ test("stop during screenshot capture cleans late screen context and never starts
   assert.equal(controller.getState().status, "idle")
   assert.equal(events.some(event => event.channel === VOICE_IPC_CHANNELS.ANSWER_START), false)
 })
+
+test("Whisper submission can prepare screen context before transcription completes", async () => {
+  const events: SentEvent[] = []
+  let captures = 0
+  let answers = 0
+  const controller = new VoiceAssistantController({
+    getMainWindow: () => createMainWindow(events),
+    getVoiceSettings: () => ({ enabled: true, minConfidence: 0.3 }),
+    hasApiKey: () => true,
+    captureScreenContext: async () => {
+      captures++
+      return { screenshotBase64: "prepared-screen" }
+    },
+    streamVoiceAnswer: async ({ screenshotBase64, onComplete }) => {
+      answers++
+      assert.equal(screenshotBase64, "prepared-screen")
+      onComplete("answer")
+    }
+  })
+  controller.start()
+  controller.prepareSubmissionContext()
+  await flushAsyncWork()
+  assert.equal(captures, 1)
+
+  controller.handleTranscriptSegment({ ...createFinalSegment("explain database indexes"), submittedPrompt: true })
+  await flushAsyncWork()
+  assert.equal(captures, 1)
+  assert.equal(answers, 1)
+})
