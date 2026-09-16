@@ -22,6 +22,10 @@ export interface Config extends VoiceAudioSettings {
   voiceResponseStyle: "concise" | "code-first" | "detailed";
   resumeFileName?: string;
   resumeText?: string;
+  resumeExtraContext?: string;
+  githubProfileUrl?: string;
+  githubProjectsContext?: string;
+  githubProjectsSyncedAt?: string;
   opacity: number;
 }
 
@@ -42,6 +46,10 @@ export class ConfigHelper extends EventEmitter {
     voiceResponseStyle: "concise",
     resumeFileName: "",
     resumeText: "",
+    resumeExtraContext: "",
+    githubProfileUrl: "",
+    githubProjectsContext: "",
+    githubProjectsSyncedAt: "",
     opacity: 1.0
   };
 
@@ -170,6 +178,10 @@ export class ConfigHelper extends EventEmitter {
         mergedConfig.resumeText = typeof mergedConfig.resumeText === "string"
           ? mergedConfig.resumeText.slice(0, 50000)
           : "";
+        mergedConfig.resumeExtraContext = typeof mergedConfig.resumeExtraContext === "string" ? mergedConfig.resumeExtraContext.slice(0, 10000) : "";
+        mergedConfig.githubProfileUrl = typeof mergedConfig.githubProfileUrl === "string" ? mergedConfig.githubProfileUrl.slice(0, 200) : "";
+        mergedConfig.githubProjectsContext = typeof mergedConfig.githubProjectsContext === "string" ? mergedConfig.githubProjectsContext.slice(0, 30000) : "";
+        mergedConfig.githubProjectsSyncedAt = typeof mergedConfig.githubProjectsSyncedAt === "string" ? mergedConfig.githubProjectsSyncedAt.slice(0, 40) : "";
         mergedConfig.voiceTranscriptionModel = this.sanitizeVoiceTranscriptionModel(
           mergedConfig.voiceTranscriptionModel
         );
@@ -266,6 +278,10 @@ export class ConfigHelper extends EventEmitter {
       const newConfig = { ...currentConfig, ...updates };
       newConfig.resumeFileName = typeof newConfig.resumeFileName === "string" ? newConfig.resumeFileName.slice(0, 255) : "";
       newConfig.resumeText = typeof newConfig.resumeText === "string" ? newConfig.resumeText.slice(0, 50000) : "";
+      newConfig.resumeExtraContext = typeof newConfig.resumeExtraContext === "string" ? newConfig.resumeExtraContext.slice(0, 10000) : "";
+      newConfig.githubProfileUrl = typeof newConfig.githubProfileUrl === "string" ? newConfig.githubProfileUrl.slice(0, 200) : "";
+      newConfig.githubProjectsContext = typeof newConfig.githubProjectsContext === "string" ? newConfig.githubProjectsContext.slice(0, 30000) : "";
+      newConfig.githubProjectsSyncedAt = typeof newConfig.githubProjectsSyncedAt === "string" ? newConfig.githubProjectsSyncedAt.slice(0, 40) : "";
       Object.assign(newConfig, sanitizeVoiceAudioSettings(newConfig));
       this.saveConfig(newConfig);
       
@@ -283,7 +299,9 @@ export class ConfigHelper extends EventEmitter {
           updates.voiceTriggerConfidenceThreshold !== undefined ||
           updates.voiceResponseStyle !== undefined ||
           updates.resumeFileName !== undefined ||
-          updates.resumeText !== undefined) {
+          updates.resumeText !== undefined || updates.resumeExtraContext !== undefined ||
+          updates.githubProfileUrl !== undefined || updates.githubProjectsContext !== undefined ||
+          updates.githubProjectsSyncedAt !== undefined) {
         this.emit('config-updated', newConfig);
       }
       

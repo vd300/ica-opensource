@@ -33,6 +33,10 @@ export interface AppConfig extends VoiceAudioSettings {
   voiceResponseStyle: VoiceResponseStyle
   resumeFileName: string
   resumeText: string
+  resumeExtraContext: string
+  githubProfileUrl: string
+  githubProjectsContext: string
+  githubProjectsSyncedAt: string
   opacity: number
 }
 
@@ -100,6 +104,8 @@ export interface ElectronAPI {
   updateConfig: (config: Partial<AppConfig>) => Promise<AppConfig>
   selectResume: () => Promise<{ success: boolean; canceled?: boolean; fileName?: string; characterCount?: number; error?: string }>
   clearResume: () => Promise<{ success: boolean; error?: string }>
+  syncGitHubProfile: (profile: string) => Promise<{ success: boolean; profileUrl?: string; projectCount?: number; syncedAt?: string; error?: string }>
+  clearGitHubProfile: () => Promise<{ success: boolean; error?: string }>
   onConfigUpdated: (callback: (config: Omit<AppConfig, "apiKey">) => void) => () => void
   checkApiKey: () => Promise<boolean>
   validateApiKey: (apiKey: string) => Promise<{ valid: boolean; error?: string }>

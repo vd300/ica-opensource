@@ -227,6 +227,11 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
   const [resumeFileName, setResumeFileName] = useState("");
   const [resumeCharacterCount, setResumeCharacterCount] = useState(0);
   const [isResumeLoading, setIsResumeLoading] = useState(false);
+  const [resumeExtraContext, setResumeExtraContext] = useState("");
+  const [githubProfileUrl, setGithubProfileUrl] = useState("");
+  const [githubProjectCount, setGithubProjectCount] = useState(0);
+  const [githubProjectsSyncedAt, setGithubProjectsSyncedAt] = useState("");
+  const [isGitHubLoading, setIsGitHubLoading] = useState(false);
   const [audioSettings, setAudioSettings] = useState<VoiceAudioSettings>({ ...DEFAULT_VOICE_AUDIO_SETTINGS });
   const audioRequirementError = voiceAudioRequirementError(audioSettings.voiceAudioService, apiProvider, apiKey);
   const [isLoading, setIsLoading] = useState(false);
@@ -266,6 +271,10 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         voiceResponseStyle?: VoiceResponseStyle;
         resumeFileName?: string;
         resumeText?: string;
+        resumeExtraContext?: string;
+        githubProfileUrl?: string;
+        githubProjectsContext?: string;
+        githubProjectsSyncedAt?: string;
       }
 
       window.electronAPI
@@ -291,6 +300,10 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
           setVoiceResponseStyle(config.voiceResponseStyle || "concise");
           setResumeFileName(config.resumeFileName || "");
           setResumeCharacterCount(config.resumeText?.length || 0);
+          setResumeExtraContext(config.resumeExtraContext || "");
+          setGithubProfileUrl(config.githubProfileUrl || "");
+          setGithubProjectCount((config.githubProjectsContext?.match(/^- /gm) || []).length);
+          setGithubProjectsSyncedAt(config.githubProjectsSyncedAt || "");
         })
         .catch((error: unknown) => {
           console.error("Failed to load config:", error);
@@ -338,6 +351,7 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
         ...sanitizeVoiceAudioSettings(audioSettings),
         voiceTriggerConfidenceThreshold,
         voiceResponseStyle,
+        resumeExtraContext,
       });
       
       if (result) {
@@ -376,6 +390,33 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
       setResumeFileName("");
       setResumeCharacterCount(0);
       showToast("Resume removed", "New GPT-Live sessions will no longer use resume context.", "success");
+    }
+  };
+
+  const handleGitHubSync = async () => {
+    setIsGitHubLoading(true);
+    try {
+      const result = await window.electronAPI.syncGitHubProfile(githubProfileUrl);
+      if (result.success) {
+        setGithubProfileUrl(result.profileUrl || githubProfileUrl);
+        setGithubProjectCount(result.projectCount || 0);
+        setGithubProjectsSyncedAt(result.syncedAt || "");
+        showToast("GitHub projects saved", `${result.projectCount || 0} public source repositories are available to new GPT-Live sessions.`, "success");
+      } else {
+        showToast("GitHub import failed", result.error || "Unable to import GitHub projects.", "error");
+      }
+    } finally {
+      setIsGitHubLoading(false);
+    }
+  };
+
+  const handleGitHubClear = async () => {
+    const result = await window.electronAPI.clearGitHubProfile();
+    if (result.success) {
+      setGithubProfileUrl("");
+      setGithubProjectCount(0);
+      setGithubProjectsSyncedAt("");
+      showToast("GitHub memory removed", "New GPT-Live sessions will no longer use the project snapshot.", "success");
     }
   };
 
@@ -651,6 +692,29 @@ export function SettingsDialog({ open: externalOpen, onOpenChange }: SettingsDia
                     </div>
                   </div>
                   <p className="text-xs text-white/45">PDF, DOCX, TXT, or Markdown; up to 10 MB. The original file is sent to OpenAI for parsing and deleted from OpenAI after the request. Only the returned interview reference is stored locally. Changes apply to the next Live session.</p>
+                  <label className="block text-xs font-medium text-white/70" htmlFor="resumeExtraContext">Extra resume context</label>
+                  <textarea id="resumeExtraContext" rows={4} maxLength={10000} value={resumeExtraContext}
+                    onChange={(event) => setResumeExtraContext(event.target.value)}
+                    placeholder="Add factual clarifications not present in the resume: your exact role, project decisions, outcomes, or technologies you can confidently discuss."
+                    className="w-full resize-y rounded-md border border-white/10 bg-black/50 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/25" />
+                  <p className="text-xs text-white/45">Saved with Settings and used beside the parsed resume. Only add facts you can defend in an interview.</p>
+                </div>
+                <div className="space-y-2 rounded-md border border-white/10 bg-white/[0.03] p-3">
+                  <div className="text-xs font-medium text-white/80">GitHub project memory</div>
+                  <div className="flex gap-2">
+                    <Input value={githubProfileUrl} onChange={(event) => setGithubProfileUrl(event.target.value)}
+                      placeholder="GitHub username or profile URL" disabled={isGitHubLoading} />
+                    <Button type="button" size="sm" variant="outline" disabled={isGitHubLoading || !githubProfileUrl.trim()} onClick={handleGitHubSync}>
+                      {isGitHubLoading ? "Importing..." : githubProjectCount ? "Refresh" : "Import"}
+                    </Button>
+                    {githubProjectCount > 0 && <Button type="button" size="sm" variant="ghost" disabled={isGitHubLoading} onClick={handleGitHubClear}>Remove</Button>}
+                  </div>
+                  <p className="text-xs text-white/45">
+                    {githubProjectCount > 0
+                      ? `${githubProjectCount} public source repositories stored locally${githubProjectsSyncedAt ? `; refreshed ${new Date(githubProjectsSyncedAt).toLocaleDateString()}` : ""}.`
+                      : "Imports public profile and repository metadata from GitHub, then stores a local snapshot for future GPT-Live sessions."}
+                    {" "}Repository metadata is factual context, but GPT-Live is instructed not to infer your contribution or proficiency.
+                  </p>
                 </div>
                 <p className="text-xs text-white/50">Submission and pause settings apply to Whisper and Current recognition only. Whisper uploads one complete recording when you submit; Automatic mode submits after detected speech and the configured pause. GPT-Live responds naturally without a submit shortcut or transcript review.</p>
                 {audioRequirementError && <p role="alert" className="text-xs text-amber-300">{audioRequirementError}</p>}

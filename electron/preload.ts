@@ -261,6 +261,8 @@ const electronAPI = {
     ipcRenderer.invoke("update-config", config),
   selectResume: () => ipcRenderer.invoke("select-resume"),
   clearResume: () => ipcRenderer.invoke("clear-resume"),
+  syncGitHubProfile: (profile: string) => ipcRenderer.invoke("sync-github-profile", profile),
+  clearGitHubProfile: () => ipcRenderer.invoke("clear-github-profile"),
   onConfigUpdated: (callback: (config: Omit<AppConfig, "apiKey">) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, config: Omit<AppConfig, "apiKey">) => callback(config)
     ipcRenderer.on("config-updated", subscription)

@@ -114,6 +114,23 @@ test("Live gives resume facts to both conversation and written-answer models", a
   }
 })
 
+test("Live gives extra resume and stored GitHub facts to both models without permitting inference", async context => {
+  const calls: any[][] = []
+  context.mock.method(axios, "post", async (...args: any[]) => {
+    calls.push(args)
+    return { status: 201, data: { session: { id: "context-session" }, transport: { type: "webrtc", sdp: "v=0\r\n" } } }
+  })
+  await new LiveVoiceService("test-secret", "Resume facts", "I owned the API migration",
+    "- event-platform — primary language: Python; repository: https://github.com/me/event-platform").create("v=0\r\n")
+  const session = calls[0][1].session
+  for (const instructions of [session.instructions, session.delegation.responses.instructions]) {
+    assert.match(instructions, /I owned the API migration/)
+    assert.match(instructions, /event-platform/)
+    assert.match(instructions, /does not prove the candidate's role/i)
+    assert.match(instructions, /Never claim the candidate knows, built, used, led/i)
+  }
+})
+
 test("Live rejects bad SDP and sanitizes network errors", async context => {
   let requests = 0
   context.mock.method(axios, "post", async () => {

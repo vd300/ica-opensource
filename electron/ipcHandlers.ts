@@ -5,6 +5,7 @@ import { randomBytes } from "crypto"
 import { IIpcHandlerDeps } from "./main"
 import { configHelper } from "./ConfigHelper"
 import { parseResumeFile } from "./ResumeService"
+import { fetchGitHubProfile } from "./GitHubProfileService"
 import { VOICE_IPC_CHANNELS } from "./voiceIpc"
 import type {
   VoiceIpcResult,
@@ -145,6 +146,26 @@ export function initializeIpcHandlers(deps: IIpcHandlerDeps): void {
 
   ipcMain.handle("clear-resume", () => {
     configHelper.updateConfig({ resumeFileName: "", resumeText: "" })
+    return { success: true }
+  })
+
+  ipcMain.handle("sync-github-profile", async (_event, profile: unknown) => {
+    try {
+      if (typeof profile !== "string") throw new Error("Enter a GitHub username or profile URL.")
+      const snapshot = await fetchGitHubProfile(profile)
+      configHelper.updateConfig({
+        githubProfileUrl: snapshot.profileUrl,
+        githubProjectsContext: snapshot.context,
+        githubProjectsSyncedAt: snapshot.syncedAt
+      })
+      return { success: true, ...snapshot }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Unable to import GitHub projects." }
+    }
+  })
+
+  ipcMain.handle("clear-github-profile", () => {
+    configHelper.updateConfig({ githubProfileUrl: "", githubProjectsContext: "", githubProjectsSyncedAt: "" })
     return { success: true }
   })
 
